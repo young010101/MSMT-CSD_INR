@@ -11,21 +11,21 @@ shells: [3000] # which bval shell to use
 scale_data: True # scale the dwi to 0-1 range before fitting
 scheduler: True # use a learning rate schedular
 
-width: 144
-height: 173
-depth: 144
+width: 145
+height: 174
+depth: 145
 
 log_freq: 0 # number of iterations between logging, 0 for no logging
 
 paths: # from repository root
-  mask: data/ISMRM2015/synth/hires_files/tissue_mask_hires.nii.gz
-  fsl_bvecs: data/ISMRM2015/synth/inr.bvecs #fsl style bvecs/bvals also accepted: mrtrix format. Use mrtrix_bvecs:
-  fsl_bvals: data/ISMRM2015/synth/used.bvals
-  response: data/ISMRM2015/synth/hires_files/b3000_resp.txt
-  nifti: data/ISMRM2015/synth/hires_files/sim_multi_hires.nii.gz
-  recon_nifti: data/ISMRM2015/synth/hires_files/sim_multi_hires.nii.gz # dwi image with desired output shape
-  recon_mask: data/ISMRM2015/synth/hires_files/tissue_mask_hires.nii.gz # mask with desired output shape
-  output: runs/test
+  mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
+  fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+  nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  output: runs/mwu100408
 
 train_cfg:
   lmax: 8
