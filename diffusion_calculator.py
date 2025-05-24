@@ -10,7 +10,7 @@ from utils import (
     spherical_to_cartesian,
 )
 
-from smt_axon_diameter_origin import smt_axon_diameter
+from smt_axon_diameter_tensor import smt_axon_diameter
 
 
 def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:
@@ -182,18 +182,27 @@ class SignalMultishell:
 
 class VonShell:
     def compute_signal_from_coeff(self, coeffs: torch.tensor):
+        device = coeffs.device
         gmr = 2.67e8
-        Delta = np.concatenate((np.ones([1,8])*19e-3, np.ones([1,8])*49e-3), axis=1)
-        delta = np.concatenate((np.ones([1,8])*8e-3,  np.ones([1,8])*8e-3),  axis=1)
-        bvals = np.array([50, 350, 800, 1500, 2400, 3450, 4750, 6000, 200, 950, 2300, 4250, 6750, 9850, 13500, 17800])* 1e6
-        G = 1./(gmr * delta) * np.sqrt(bvals/(Delta-delta/3))
+        
+        Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1).to(device)
+        delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1).to(device)
+        bvals = torch.tensor([50, 350, 800, 1500, 2400, 3450, 4750, 6000,
+                          200, 950, 2300, 4250, 6750, 9850, 13500, 17800], dtype=torch.float64, device=device) * 1e6
+
+        G = 1.0 / (gmr * delta) * torch.sqrt(bvals / (Delta - delta / 3))
+        # Delta = np.concatenate((np.ones([1,8])*19e-3, np.ones([1,8])*49e-3), axis=1)
+        # delta = np.concatenate((np.ones([1,8])*8e-3,  np.ones([1,8])*8e-3),  axis=1)
+        # bvals = np.array([50, 350, 800, 1500, 2400, 3450, 4750, 6000, 200, 950, 2300, 4250, 6750, 9850, 13500, 17800])* 1e6
+        # G = 1./(gmr * delta) * np.sqrt(bvals/(Delta-delta/3))
         model_param = coeffs
         # coeffs_np = coeffs.detach().cpu().numpy()
         # sig_np = smt_axon_diameter(bvals, Delta, delta, G, coeffs_np)
         # sig_tensor = torch.tensor(sig_np, device=coeffs.device, dtype=coeffs.dtype)
         # return sig
     
-        coeffs_np = coeffs.detach().cpu().numpy()
+        # coeffs_np = coeffs.detach().cpu().numpy()
+        coeffs_np = coeffs
         all_signals = []
 
         # [0, 1]
@@ -208,8 +217,9 @@ class VonShell:
             all_signals.append(sig_np)
 
         # stack all signal outputs back into one tensor: shape (batch_size, num_bvals)
-        sig_np_batch = np.stack(all_signals, axis=0)
-        sig_tensor = torch.tensor(sig_np_batch, device=coeffs.device, dtype=coeffs.dtype, requires_grad=True)
+        sig_np_batch = torch.stack(all_signals, axis=0)
+        # sig_tensor = torch.tensor(sig_np_batch, device=coeffs.device, dtype=coeffs.dtype, requires_grad=True)
+        sig_tensor = sig_np_batch
         return sig_tensor
     def compute_negative_signal(self, coeffs: torch.Tensor):
         return torch.zeros((1,1))
