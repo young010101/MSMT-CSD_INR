@@ -57,6 +57,7 @@ class Trainer:
                     _input
                 )  # [B, n_dir*3] Theta, Phi, volume fraction
 
+                # todo: map and (fh, fr, a, Dh)
                 output, kwargs = self.output_calculator.output_from_model_out(model_out)
                 loss = self.loss_fn(output, labels, **kwargs)
 

@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 
 def initialize_run():
-    cfg = parse_cfg(Path("configs/example_config_multi.yaml"))
+    cfg = parse_cfg(Path("configs/example_config_von.yaml"))
     #wandb.init(project=cfg["project_name"], job_type="testing", config=cfg)
 
     #cfg = wandb.config
@@ -34,6 +34,7 @@ def initialize_run():
     print(model)
 
     dataset = get_dataset(cfg)
+    print("dataset gotten")
     dataloader = DataLoader(
         dataset,
         batch_size=train_cfg["batch_size"],
@@ -47,7 +48,7 @@ def initialize_run():
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     scheduler = StepLR(optimizer, step_size=1, gamma=0.99) if cfg.get("scheduler", False) else None
 
-    device = "cuda:0" if torch.cuda.is_available() else "cpu"
+    device = "cuda:5" if torch.cuda.is_available() else "cpu"
     print(device)
     epochs = train_cfg["epochs"]
 

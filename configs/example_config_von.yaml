@@ -1,13 +1,13 @@
-project_name: multishell # project name for logging using wandb (wandb.ai), uncomment in main.py
+project_name: von_shell # project name for logging using wandb (wandb.ai), uncomment in main.py
 
-model_name: multishell # see models.py
-output_calculator: multishell # see output_calculators.py
-loss_function_name: multishell_csd_loss # see loss_functions.py
+model_name: von_shell # see models.py
+output_calculator: von_shell # see output_calculators.py
+loss_function_name: singleshell_csd_loss # see loss_functions.py
 gaussian_encoding: True # use fourier features encoding
 fod_rescale: True # multiply with rescaling factor after convolution of FOD and response
-dataset_name: multishell # see datasets.py
+dataset_name: von_shell # see datasets.py
 bval_delta: 100 # values between the shell defined below +- bval_delta are included for the shell
-shells: [0, 1200, 3000] # which bval shell to use
+shells: [3000] # which bval shell to use
 scale_data: True # scale the dwi to 0-1 range before fitting
 scheduler: True # use a learning rate schedular
 
@@ -18,16 +18,17 @@ depth: 145
 log_freq: 0 # number of iterations between logging, 0 for no logging
 
 paths: # from repository root
-  mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  # mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
   fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
   fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
   wm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
   gm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_gm.txt
   csf_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_csf.txt
   nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
   recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
   recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
-  output: runs/mwu100408_multi
+  output: runs/mwu100408_von
 
 train_cfg:
   lmax: 8

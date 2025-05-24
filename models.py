@@ -92,6 +92,45 @@ class Fod_NeSH(nn.Module):
         return self.mlp(x_emb)
 
 
+class Von_G(nn.Module):
+    def __init__(
+        self,
+        l_max=8,
+        lpos=10,
+        hidden_dim=256,
+        n_layers=11,
+        sigma=None,
+        gaussian=True,
+    ) -> None:
+        super().__init__()
+
+        output_size = 4
+
+        input_size = lpos * 2 if gaussian else lpos * 6 + 3
+        self.mlp = nn.Sequential(
+            *(
+                [nn.Linear(input_size, hidden_dim), nn.ReLU()]
+                + [nn.Linear(hidden_dim, hidden_dim), nn.ReLU()] * (n_layers - 1)
+                + [nn.Linear(hidden_dim, output_size)]
+            )
+        )
+
+        self.Lpos = lpos
+        self.sigma = sigma
+        self.B = nn.Parameter(torch.randn([lpos, 3]) * sigma) if gaussian else None
+
+    def forward(self, x, t_frac=None) -> torch.Tensor:
+        if self.B is not None:
+            x_emb = input_mapping(x, self.B.to(x.device))
+        else:
+            x_emb = positional_encoding(x, self.Lpos, self.sigma)
+
+        if t_frac is not None:
+            x_emb = progressive_emb(x_emb, t_frac)
+
+        return self.mlp(x_emb)
+
+
 class Fod_NeSH2(nn.Module):
     def __init__(
         self,
@@ -255,6 +294,7 @@ MODELS = {
     "fod": partial(create_std_model, model=Fod_NeSH),
     "multishell": partial(create_std_model, model=Multi_Fod_NeSH),
     "split_multi": partial(create_std_model, model=Split_Fod_NeSH),
+    "von_shell": partial(create_std_model, model=Von_G),
 }
 
 

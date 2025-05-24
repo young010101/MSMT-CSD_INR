@@ -82,6 +82,99 @@ class DiffusionDataset(Dataset):
     def get_directions(self) -> np.ndarray:
         pass
 
+class VonShellDataset(DiffusionDataset):
+    def __init__(
+        self,
+        bvec_path: Path,
+        bval_path: Path,
+        mrtrix_bvec_path: Path,
+        response_path: Path,
+        shell: int,
+        bval_delta: int,
+        nifti_path: Path,
+        mask_path: Path = None,
+        scale: bool = True,
+    ) -> None:
+        # nifti_file = nib.load(nifti_path)
+        n19 = nib.load('/data/users/cyang/notes/Research/genAI/diffusion/' + 'qb_diff_real_delta_19_avg_by_b.nii')
+        n49 = nib.load('/home/cyang/repos/MSMT-CSD_INR/' + 'qb_diff_real_delta_49_avg_by_b.nii')
+
+
+        # if bvec_path and bval_path:
+        #     self.bvals = parse_bvals(bval_path)
+        #     self.bvecs = parse_bvecs(bvec_path)
+        # else:
+        #     mrtrix_bvecs = parse_mrtrix(mrtrix_bvec_path)
+        #     self.bvals = mrtrix_bvecs[:, -1]
+        #     self.bvecs = mrtrix_bvecs[:, :3]
+
+        # full_img = nifti_file.get_fdata()
+        full_img = np.concatenate([n19.get_fdata()[...,1:], n49.get_fdata()[...,1:]], axis=-1)
+        # self.dwi_idx = (self.bvals > (shell - bval_delta)) & (self.bvals < (shell + bval_delta))
+        
+        # available_indices = np.where(self.dwi_idx)[0]  # ??????????????? 90
+
+        # # undersample 30
+        # num_samples = 90 * 9 // 10
+        # selected_indices = np.random.choice(available_indices, num_samples, replace=False)
+
+        # # bvecs
+        # undersampled_bvecs = bvecs[selected_indices]
+        # undersampled_img = full_img[..., selected_indices]  # ??????? 30 ???
+        # output_array = full_img[..., self.dwi_idx]  # remove b0
+        output_array = full_img
+        # output_array = undersampled_img
+        width, height, depth, n_grad = output_array.shape
+
+        # self.cart_bvecs = parse_bvecs(bvec_path)[self.dwi_idx]  # remove b0
+        # Separate into function for generating input coordinates
+        self.input_tensor = create_input_space_prop(width, height, depth)
+
+        self.scale_value = np.percentile(output_array, 99) if scale else 1
+        output_array = output_array / self.scale_value
+
+        if mask_path:
+            mask_data = nib.load(mask_path).get_fdata().astype(int)
+            brain_idx = np.asarray(mask_data == 1).nonzero()
+
+            self.input_tensor = self.input_tensor[
+                brain_idx[0], brain_idx[1], brain_idx[2]
+            ]
+            output_array = output_array[brain_idx[0], brain_idx[1], brain_idx[2], :]
+        else:
+            self.input_tensor = self.input_tensor.reshape(width * height * depth, 3)
+            output_array = output_array.reshape(width * height * depth, -1)
+
+        self.output_tensor = torch.tensor(output_array, dtype=torch.float32)
+        self.response_coeff = (
+            torch.tensor(
+                parse_response(response_path)[0], dtype=torch.float
+            )
+            / self.scale_value
+        )
+
+    def __len__(self) -> int:
+        return self.input_tensor.shape[0]
+
+    def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
+        return self.input_tensor[idx], self.output_tensor[idx]
+
+    def get_dwi_idx(self) -> np.ndarray:
+        return self.dwi_idx.nonzero()[0]
+
+    def get_scale(self) -> float | np.ndarray:
+        return self.scale_value
+
+    def get_response(self) -> np.ndarray:
+        return self.response_coeff
+
+    def get_directions(self) -> np.ndarray:
+        return self.cart_bvecs
+
+    def get_bvals(self) -> np.ndarray:
+        return self.bvals
+
+
 class SingleShellDataset(DiffusionDataset):
     def __init__(
         self,
@@ -107,7 +200,18 @@ class SingleShellDataset(DiffusionDataset):
 
         full_img = nifti_file.get_fdata()
         self.dwi_idx = (self.bvals > (shell - bval_delta)) & (self.bvals < (shell + bval_delta))
+        
+        # available_indices = np.where(self.dwi_idx)[0]  # ??????????????? 90
+
+        # # undersample 30
+        # num_samples = 90 * 9 // 10
+        # selected_indices = np.random.choice(available_indices, num_samples, replace=False)
+
+        # # bvecs
+        # undersampled_bvecs = bvecs[selected_indices]
+        # undersampled_img = full_img[..., selected_indices]  # ??????? 30 ???
         output_array = full_img[..., self.dwi_idx]  # remove b0
+        # output_array = undersampled_img
         width, height, depth, n_grad = output_array.shape
 
         self.cart_bvecs = parse_bvecs(bvec_path)[self.dwi_idx]  # remove b0
@@ -173,6 +277,7 @@ class MultiShellDataset(Dataset):
         scale: bool = True,
     ) -> None:
         nifti_file = nib.load(nifti_path)
+        # take long time
         nifti_img = nifti_file.get_fdata()
 
         if bvec_path and bval_path:
@@ -187,6 +292,7 @@ class MultiShellDataset(Dataset):
 
         used = np.array([bval in shells for bval in bvals]) # used
         self.dwi_idx = used
+        # take long time
         scale_values = [np.percentile(nifti_img[..., get_dwi_indices(bvals, bval, bval_delta)], 99) if scale else 1 for bval in bvals]
 
         b0_idx = (bvals < bval_delta)
@@ -263,6 +369,28 @@ class MultiShellDataset(Dataset):
         return self.cart_bvecs
 
 
+def create_vonshell(cfg: dict) -> DiffusionDataset:
+    mask_path = Path(cfg["paths"]["mask"]) if cfg["paths"].get("mask", None) else None
+    bvec_path = Path(cfg["paths"]["fsl_bvecs"]) if cfg["paths"].get("fsl_bvecs", None) else None
+    bval_path = Path(cfg["paths"]["fsl_bvals"]) if cfg["paths"].get("fsl_bvals", None) else None
+    mrtrix_bvec_path = Path(cfg["paths"]["mrtrix_bvecs"]) if cfg["paths"].get("mrtrix_bvecs", None) else None
+
+    response_path = Path(cfg['paths']['response'])
+    dataset = VonShellDataset(
+        bvec_path=bvec_path,
+        bval_path=bval_path,
+        mrtrix_bvec_path=mrtrix_bvec_path,
+        response_path=response_path,
+        shell=cfg["shells"][0],
+        bval_delta=cfg["bval_delta"],
+        nifti_path=Path(cfg["paths"]["nifti"]),
+        mask_path=mask_path,
+        scale=cfg["scale_data"],
+    )
+
+    return dataset
+
+
 
 def create_singleshell(cfg: dict) -> DiffusionDataset:
     mask_path = Path(cfg["paths"]["mask"]) if cfg["paths"].get("mask", None) else None
@@ -314,6 +442,7 @@ def create_multishell(cfg: dict) -> MultiShellDataset:
 DATASETS = {
     "singleshell": create_singleshell,
     "multishell": create_multishell,
+    "von_shell": create_vonshell,
 }
 
 

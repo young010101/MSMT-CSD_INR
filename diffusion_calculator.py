@@ -10,6 +10,8 @@ from utils import (
     spherical_to_cartesian,
 )
 
+from smt_axon_diameter_origin import smt_axon_diameter
+
 
 def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:
     n_dir = thetas.shape[0]
@@ -176,3 +178,38 @@ class SignalMultishell:
         amplitudes = torch.einsum("bk, dk -> bd", fod_coeffs, self.sphere_y_mat)
         max_values = torch.mean(amplitudes, dim=1, keepdim=True) * 0.1
         return torch.clamp(amplitudes - max_values, max=0)
+
+
+class VonShell:
+    def compute_signal_from_coeff(self, coeffs: torch.tensor):
+        gmr = 2.67e8
+        Delta = np.concatenate((np.ones([1,8])*19e-3, np.ones([1,8])*49e-3), axis=1)
+        delta = np.concatenate((np.ones([1,8])*8e-3,  np.ones([1,8])*8e-3),  axis=1)
+        bvals = np.array([50, 350, 800, 1500, 2400, 3450, 4750, 6000, 200, 950, 2300, 4250, 6750, 9850, 13500, 17800])* 1e6
+        G = 1./(gmr * delta) * np.sqrt(bvals/(Delta-delta/3))
+        model_param = coeffs
+        # coeffs_np = coeffs.detach().cpu().numpy()
+        # sig_np = smt_axon_diameter(bvals, Delta, delta, G, coeffs_np)
+        # sig_tensor = torch.tensor(sig_np, device=coeffs.device, dtype=coeffs.dtype)
+        # return sig
+    
+        coeffs_np = coeffs.detach().cpu().numpy()
+        all_signals = []
+
+        # [0, 1]
+        # [0, 20e-6]
+        # [0, 1.7e-9]
+        # [0, 1]
+        coeffs_np[:, 1] = coeffs_np[:, 1] * 20e-6
+        coeffs_np[:, 2] = coeffs_np[:, 2] * 1.7e-9
+        for i in range(coeffs_np.shape[0]):
+            single_coeff = coeffs_np[i]  # shape (4,)
+            sig_np = smt_axon_diameter(bvals, Delta, delta, G, single_coeff)  # shape (num_bvals,)
+            all_signals.append(sig_np)
+
+        # stack all signal outputs back into one tensor: shape (batch_size, num_bvals)
+        sig_np_batch = np.stack(all_signals, axis=0)
+        sig_tensor = torch.tensor(sig_np_batch, device=coeffs.device, dtype=coeffs.dtype, requires_grad=True)
+        return sig_tensor
+    def compute_negative_signal(self, coeffs: torch.Tensor):
+        return torch.zeros((1,1))

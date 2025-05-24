@@ -1,0 +1,4 @@
+__pycache__/
+*.nii.gz
+*.nii
+*.pt

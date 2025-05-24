@@ -1,7 +1,7 @@
 from typing import Protocol, Any
 from torch import Tensor
 
-from diffusion_calculator import SignalSingleShell, SignalMultishell
+from diffusion_calculator import SignalSingleShell, SignalMultishell, VonShell
 from datasets import SingleShellDataset, MultiShellDataset
 
 import numpy as np
@@ -39,6 +39,17 @@ def create_singleshell(
 def create_multishell(
     cfg: dict, dataset: MultiShellDataset, device: str, **kwargs
 ) -> CoeffDiff:
+    """Factory function to create a CoeffDiff instance for multi-shell data.
+
+    Args:
+        cfg: Configuration dictionary containing training parameters.
+        dataset: An instance of MultiShellDataset providing diffusion data.
+        device: Target device for computation (e.g., 'cpu' or 'cuda').
+        **kwargs: Additional optional parameters.
+
+    Returns:
+        CoeffDiff: A configured instance for computing multi-shell signals.
+    """
     bval_idx = [np.where(dataset.shells == bval)[0][0] for bval in dataset.get_bvals()]
 
     diff_calculator = SignalMultishell(
@@ -52,9 +63,17 @@ def create_multishell(
     return CoeffDiff(diff_calculator)
 
 
+def create_von(
+    cfg: dict, dataset: MultiShellDataset, device: str, **kwargs
+) -> CoeffDiff:
+    diff_calculator = VonShell()
+    return CoeffDiff(diff_calculator)
+    
+
 OUTPUT_CALCULATORS = {
     "singleshell": create_singleshell,
     "multishell": create_multishell,
+    "von_shell": create_von,
 }
 
 
