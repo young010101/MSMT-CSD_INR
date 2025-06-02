@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 # Constants
 gmr = 2.67e8
 
+
 def smt_axon_diameter(b, Delta, delta, G, model_param):
     f_r, adi, Dh, f_csf = model_param
     device = adi.device
@@ -16,6 +17,7 @@ def smt_axon_diameter(b, Delta, delta, G, model_param):
 
     forward_signal = f_r * sig_r + (1 - f_r - f_csf) * sig_h + f_csf * sig_csf
     return forward_signal
+
 
 def restricted_compartment(G, Delta, delta, adi, device):
     D_r = 1.7e-9
@@ -38,31 +40,136 @@ def restricted_compartment(G, Delta, delta, adi, device):
         factor_3 = 2 * torch.exp(-D_r * alpha_2 * Delta)
         factor_4 = torch.exp(-D_r * alpha_2 * (Delta - delta))
         factor_5 = torch.exp(-D_r * alpha_2 * (Delta + delta))
-        factor_6 = D_r**2 * alpha**6 * ((adi / 2)**2 * alpha_2 - 1)
+        factor_6 = D_r ** 2 * alpha ** 6 * ((adi / 2) ** 2 * alpha_2 - 1)
 
         E0_tmp[ii, :] = (factor_1 - 2 + factor_2 + factor_3 - factor_4 - factor_5) / factor_6
 
     E0_tmp_sum = E0_tmp.sum(dim=0, keepdim=True)
-    L_perp = -2 * gmr**2 * E0_tmp_sum
-    L_para = -(Delta - delta / 3) * (gmr * delta)**2 * D_r
+    L_perp = -2 * gmr ** 2 * E0_tmp_sum
+    L_para = -(Delta - delta / 3) * (gmr * delta) ** 2 * D_r
 
     zr = G * torch.sqrt(L_perp - L_para)
-    sig_r = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zr) * torch.exp(G**2 * L_perp) * erf(zr)
+    sig_r = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zr) * torch.exp(G ** 2 * L_perp) * erf(zr)
     return sig_r
+
 
 def hindered_compartment(G, Delta, delta, Dh, device):
     D_r = 1.7e-9
 
-    L_para = ((delta / 3 - Delta) * (gmr * delta)**2) * D_r
-    L_perp_h = ((delta / 3 - Delta) * (gmr * delta)**2) * Dh
+    L_para = ((delta / 3 - Delta) * (gmr * delta) ** 2) * D_r
+    L_perp_h = ((delta / 3 - Delta) * (gmr * delta) ** 2) * Dh
 
     zh = G * torch.sqrt(L_perp_h - L_para)
-    sig_h = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zh) * torch.exp(G**2 * L_perp_h) * erf(zh)
+    sig_h = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zh) * torch.exp(G ** 2 * L_perp_h) * erf(zh)
     return sig_h
+
 
 def csf_compartment(b, device):
     D_csf = 3e-9
     return torch.exp(-b * D_csf)
+
+
+def smt_axon_diameter_batch(b, Delta, delta, G, model_params):
+    """
+    支持批处理的smt_axon_diameter函数
+
+    Args:
+        b, Delta, delta, G: 与原函数相同
+        model_params: shape (batch_size, 4) 的tensor
+    Returns:
+        forward_signal: shape (batch_size, n_bvals) 的tensor
+    """
+    # 解包批处理参数
+    f_r = model_params[:, 0]  # shape: (batch_size,)
+    adi = model_params[:, 1]  # shape: (batch_size,)
+    Dh = model_params[:, 2]  # shape: (batch_size,)
+    f_csf = model_params[:, 3]  # shape: (batch_size,)
+
+    device = model_params.device
+
+    # 计算各组分信号（需要修改为支持批处理）
+    sig_r = restricted_compartment_batch(G, Delta, delta, adi, device)
+    sig_h = hindered_compartment_batch(G, Delta, delta, Dh, device)
+    sig_csf = csf_compartment_batch(b, device)
+
+    # 广播计算最终信号
+    # f_r: (batch_size,) -> (batch_size, 1)
+    # sig_r: (1, n_bvals) -> (batch_size, n_bvals)
+    f_r = f_r.unsqueeze(1)
+    f_csf = f_csf.unsqueeze(1)
+
+    forward_signal = f_r * sig_r + (1 - f_r - f_csf) * sig_h + f_csf * sig_csf
+    return forward_signal
+
+
+def restricted_compartment_batch(G, Delta, delta, adi_batch, device):
+    """
+    批处理版本的restricted_compartment
+
+    Args:
+        adi_batch: shape (batch_size,) 的轴突直径
+    Returns:
+        sig_r: shape (batch_size, n_bvals)
+    """
+    D_r = 1.7e-9
+    batch_size = adi_batch.shape[0]
+    n_b = Delta.shape[1]
+
+    bessel_root = torch.tensor([
+        1.84118378134066, 5.33144277352503, 8.53631636634629, 11.7060049025921, 14.8635886339090,
+        18.0155278626818, 21.1643698591888, 24.3113268572108, 27.4570505710592, 30.6019229726691,
+        33.7461828986674, 36.8899874092368, 40.0334440533507, 43.1766289654488, 46.3195975611739,
+        49.4623911397028, 52.6050411115567, 55.7475717922510, 58.8900022991857, 62.0323478706620
+    ], device=device)
+
+    # 为每个batch计算alphm: (batch_size, len(bessel_root))
+    adi_expanded = adi_batch.unsqueeze(1)  # (batch_size, 1)
+    alphm = bessel_root.unsqueeze(0) / (adi_expanded / 2)  # (batch_size, len(bessel_root))
+
+    # E0_tmp: (batch_size, len(bessel_root), n_b)
+    E0_tmp = torch.zeros(batch_size, len(alphm[0]), n_b, device=device)
+
+    for batch_idx in range(batch_size):
+        for ii, alpha in enumerate(alphm[batch_idx]):
+            alpha_2 = alpha ** 2
+            factor_1 = 2 * D_r * alpha_2 * delta
+            factor_2 = 2 * torch.exp(-D_r * alpha_2 * delta)
+            factor_3 = 2 * torch.exp(-D_r * alpha_2 * Delta)
+            factor_4 = torch.exp(-D_r * alpha_2 * (Delta - delta))
+            factor_5 = torch.exp(-D_r * alpha_2 * (Delta + delta))
+            factor_6 = D_r ** 2 * alpha ** 6 * ((adi_batch[batch_idx] / 2) ** 2 * alpha_2 - 1)
+
+            E0_tmp[batch_idx, ii, :] = (factor_1 - 2 + factor_2 + factor_3 - factor_4 - factor_5) / factor_6
+
+    E0_tmp_sum = E0_tmp.sum(dim=1)  # (batch_size, n_b)
+    L_perp = -2 * gmr ** 2 * E0_tmp_sum
+    L_para = -(Delta - delta / 3) * (gmr * delta) ** 2 * D_r
+
+    zr = G * torch.sqrt(L_perp - L_para)
+    sig_r = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zr) * torch.exp(G ** 2 * L_perp) * erf(zr)
+    return sig_r
+
+
+def hindered_compartment_batch(G, Delta, delta, Dh_batch, device):
+    """批处理版本的hindered_compartment"""
+    D_r = 1.7e-9
+
+    L_para = ((delta / 3 - Delta) * (gmr * delta) ** 2) * D_r
+    # Dh_batch: (batch_size,) -> (batch_size, 1)
+    Dh_expanded = Dh_batch.unsqueeze(1)
+    L_perp_h = ((delta / 3 - Delta) * (gmr * delta) ** 2) * Dh_expanded
+
+    zh = G * torch.sqrt(L_perp_h - L_para)
+    sig_h = torch.sqrt(torch.tensor(math.pi, device=device)) / (2 * zh) * torch.exp(G ** 2 * L_perp_h) * erf(zh)
+    return sig_h
+
+
+def csf_compartment_batch(b, device):
+    """批处理版本的csf_compartment"""
+    D_csf = 3e-9
+    # 返回shape (1, n_bvals)，可以广播到(batch_size, n_bvals)
+    return torch.exp(-b * D_csf).unsqueeze(0)
+
 
 if __name__ == "__main__":
     device = torch.device("cuda:5")

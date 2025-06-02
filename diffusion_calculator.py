@@ -10,7 +10,7 @@ from utils import (
     spherical_to_cartesian,
 )
 
-from smt_axon_diameter_tensor import smt_axon_diameter
+from smt_axon_diameter_tensor import smt_axon_diameter_batch
 
 
 def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:
@@ -20,7 +20,7 @@ def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:
     y_mat = torch.zeros((n_dir, n))
     for l in range(0, l_max + 1, 2):
         for m in range(-l, l + 1):
-            coef_idx = (l**2 + l) // 2 + m
+            coef_idx = (l ** 2 + l) // 2 + m
             Y = sph_harm(np.abs(m), l, thetas, phis)
             if m < 0:
                 y_mat[:, coef_idx] = torch.tensor(Y.imag * np.sqrt(2))
@@ -42,26 +42,26 @@ def get_rescale_value(l_max: int, rescale: bool = True) -> torch.Tensor:
 
 
 def create_conv_vec(
-    l_max: int, resp_coeff: torch.Tensor, rescale: bool = True
+        l_max: int, resp_coeff: torch.Tensor, rescale: bool = True
 ) -> torch.Tensor:
     rescale_value = get_rescale_value(l_max, rescale)
     conv_vec = torch.zeros((l_max + 1) * (l_max + 2) // 2)
     for i, l in enumerate(range(0, l_max + 1, 2)):
         for m in range(-l, l + 1):
-            coef_idx = (l**2 + l) // 2 + m
+            coef_idx = (l ** 2 + l) // 2 + m
             conv_vec[coef_idx] = resp_coeff[i] * rescale_value[i]
     return conv_vec
 
 
 class SignalSingleShell:
     def __init__(
-        self,
-        l_max: int,
-        resp_coeff: torch.Tensor,
-        cart_bvec: np.array = None,
-        sph_bvec: np.array = None,
-        device: str = "cpu",
-        fod_rescale: bool = True,
+            self,
+            l_max: int,
+            resp_coeff: torch.Tensor,
+            cart_bvec: np.array = None,
+            sph_bvec: np.array = None,
+            device: str = "cpu",
+            fod_rescale: bool = True,
     ):
         self.l_max = l_max
         self.device = device
@@ -105,14 +105,14 @@ class SignalSingleShell:
 
 class SignalMultishell:
     def __init__(
-        self,
-        l_max: int,
-        resp_coeff: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
-        bval_idx: list,
-        cart_bvec: np.array = None,
-        sph_bvec: np.array = None,
-        device: str = "cpu",
-        fod_rescale: bool = True,
+            self,
+            l_max: int,
+            resp_coeff: tuple[torch.Tensor, torch.Tensor, torch.Tensor],
+            bval_idx: list,
+            cart_bvec: np.array = None,
+            sph_bvec: np.array = None,
+            device: str = "cpu",
+            fod_rescale: bool = True,
     ):
         self.l_max = l_max
         self.device = device
@@ -181,45 +181,33 @@ class SignalMultishell:
 
 
 class VonShell:
+    def __init__(self):
+        # 将常量移到初始化中
+        self.gmr = 2.67e8
+        self._Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1)
+        self._delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1)
+        self._bvals = torch.tensor([50, 350, 800, 1500, 2400, 3450, 4750, 6000,
+                                    200, 950, 2300, 4250, 6750, 9850, 13500, 17800],
+                                   dtype=torch.float64) * 1e6
+
     def compute_signal_from_coeff(self, coeffs: torch.tensor):
         device = coeffs.device
-        gmr = 2.67e8
-        
-        Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1).to(device)
-        delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1).to(device)
-        bvals = torch.tensor([50, 350, 800, 1500, 2400, 3450, 4750, 6000,
-                          200, 950, 2300, 4250, 6750, 9850, 13500, 17800], dtype=torch.float64, device=device) * 1e6
 
-        G = 1.0 / (gmr * delta) * torch.sqrt(bvals / (Delta - delta / 3))
-        # Delta = np.concatenate((np.ones([1,8])*19e-3, np.ones([1,8])*49e-3), axis=1)
-        # delta = np.concatenate((np.ones([1,8])*8e-3,  np.ones([1,8])*8e-3),  axis=1)
-        # bvals = np.array([50, 350, 800, 1500, 2400, 3450, 4750, 6000, 200, 950, 2300, 4250, 6750, 9850, 13500, 17800])* 1e6
-        # G = 1./(gmr * delta) * np.sqrt(bvals/(Delta-delta/3))
-        model_param = coeffs
-        # coeffs_np = coeffs.detach().cpu().numpy()
-        # sig_np = smt_axon_diameter(bvals, Delta, delta, G, coeffs_np)
-        # sig_tensor = torch.tensor(sig_np, device=coeffs.device, dtype=coeffs.dtype)
-        # return sig
-    
-        # coeffs_np = coeffs.detach().cpu().numpy()
-        coeffs_np = coeffs
-        all_signals = []
+        # 获取常量并移动到正确设备
+        Delta = self._Delta.to(device)
+        delta = self._delta.to(device)
+        bvals = self._bvals.to(device)
 
-        # [0, 1]
-        # [0, 20e-6]
-        # [0, 1.7e-9]
-        # [0, 1]
-        coeffs_np[:, 1] = coeffs_np[:, 1] * 20e-6
-        coeffs_np[:, 2] = coeffs_np[:, 2] * 1.7e-9
-        for i in range(coeffs_np.shape[0]):
-            single_coeff = coeffs_np[i]  # shape (4,)
-            sig_np = smt_axon_diameter(bvals, Delta, delta, G, single_coeff)  # shape (num_bvals,)
-            all_signals.append(sig_np)
+        G = 1.0 / (self.gmr * delta) * torch.sqrt(bvals / (Delta - delta / 3))
 
-        # stack all signal outputs back into one tensor: shape (batch_size, num_bvals)
-        sig_np_batch = torch.stack(all_signals, axis=0)
-        # sig_tensor = torch.tensor(sig_np_batch, device=coeffs.device, dtype=coeffs.dtype, requires_grad=True)
-        sig_tensor = sig_np_batch
+        # 缩放系数
+        coeffs_scaled = coeffs.clone()
+        coeffs_scaled[:, 1] = coeffs_scaled[:, 1] * 20e-6
+        coeffs_scaled[:, 2] = coeffs_scaled[:, 2] * 1.7e-9
+
+        # 使用批处理版本
+        sig_tensor = smt_axon_diameter_batch(bvals, Delta, delta, G, coeffs_scaled)
         return sig_tensor
+
     def compute_negative_signal(self, coeffs: torch.Tensor):
-        return torch.zeros((1,1))
+        return torch.zeros((1, 1))
