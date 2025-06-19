@@ -1,6 +1,3 @@
-import math
-from functools import lru_cache
-
 import numpy as np
 import torch
 from dipy.data import get_sphere
@@ -10,7 +7,7 @@ from utils import (
     spherical_to_cartesian,
 )
 
-from smt_axon_diameter_tensor import smt_axon_diameter_batch
+from src.smt_axon_diameter_tensor import smt_axon_diameter_batch
 
 
 def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:

@@ -1,3 +1,5 @@
+import time
+
 import torch
 import math
 from torch.special import erf
@@ -192,5 +194,51 @@ if __name__ == "__main__":
     plt.plot(range(1, 9), sig[0, 0:8].cpu().numpy(), color='blue', marker='o')
     plt.plot(range(1, 9), sig[0, 8:].cpu().numpy(), color='red', marker='s')
     plt.grid(True)
-    plt.savefig("axon_diameter/2.png")
+    plt.savefig("../reports/figs/axon_diameter/2.png")
     plt.show()
+
+    model_param = torch.cat(
+        [
+            torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0),
+            torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0)
+        ],
+        dim=0
+    )
+
+    # 测试不同batch size
+    start_time = time.time()
+    for i in range(1000):
+        smt_axon_diameter_batch(bvals, Delta, delta, G, model_param)
+
+    end_time = time.time()
+    print("Time: ", end_time - start_time)
+
+    # 正确的100×4参数张量
+    model_param_100 = torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0).repeat(100, 1)
+
+    # 正确的1000×4参数张量
+    model_param_1000 = torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0).repeat(1000, 1)
+
+    # 或者使用这种方式
+    model_param_100 = torch.tile(torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device), (100, 1))
+    model_param_1000 = torch.tile(torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device), (1000, 1))
+
+    # 100×4参数测试
+    model_param_100 = torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0).repeat(100, 1)
+    print(f"model_param_100 shape: {model_param_100.shape}")
+
+    start_time = time.time()
+    for i in range(100):
+        result_100 = smt_axon_diameter_batch(bvals, Delta, delta, G, model_param_100)
+    end_time = time.time()
+    print(f"100×4参数 - 时间: {end_time - start_time:.4f}秒")
+
+    # 1000×4参数测试
+    model_param_1000 = torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0).repeat(1000, 1)
+    print(f"model_param_1000 shape: {model_param_1000.shape}")
+
+    start_time = time.time()
+    for i in range(100):
+        result_1000 = smt_axon_diameter_batch(bvals, Delta, delta, G, model_param_1000)
+    end_time = time.time()
+    print(f"1000×4参数 - 时间: {end_time - start_time:.4f}秒")
