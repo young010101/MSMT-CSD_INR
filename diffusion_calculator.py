@@ -7,8 +7,6 @@ from utils import (
     spherical_to_cartesian,
 )
 
-from src.smt_axon_diameter_tensor import smt_axon_diameter_batch
-
 
 def create_y_mat(thetas: np.array, phis: np.array, l_max: int) -> torch.Tensor:
     n_dir = thetas.shape[0]
@@ -177,34 +175,136 @@ class SignalMultishell:
         return torch.clamp(amplitudes - max_values, max=0)
 
 
+# class VonShell:
+#     def __init__(
+#             self,
+#             device: str = "cpu",
+#     ):
+#         # 将常量移到初始化中
+#         self.gmr = 2.67e8
+#         self._Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1)
+#         self._Delta = self._Delta.to(device)
+#         self._delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1)
+#         self._delta = self._delta.to(device)
+#         self._bvals = torch.tensor([50, 350, 800, 1500, 2400, 3450, 4750, 6000,
+#                                     200, 950, 2300, 4250, 6750, 9850, 13500, 17800],
+#                                    dtype=torch.float64) * 1e6
+#         self._bvals = self._bvals.to(device)
+#         G = 1.0 / (self.gmr * self._delta) * torch.sqrt(self._bvals / (self._Delta - self._delta / 3))
+#         self.G = G
+#
+#     def compute_signal_from_coeff(self, coeffs: torch.tensor):
+#         # 使用批处理版本
+#         sig_tensor = smt_axon_diameter_batch(self._bvals, self._Delta, self._delta, self.G, coeffs)
+#         return sig_tensor
+#
+#     def compute_negative_signal(self, coeffs: torch.Tensor):
+#         return torch.zeros((1, 1))
+
+
 class VonShell:
-    def __init__(self):
-        # 将常量移到初始化中
+    def __init__(
+            self,
+            device: str = "cpu",
+            max_batch_size: int = 1000,  # 添加最大批次大小参数
+    ):
+        self.device = device
+        self.max_batch_size = max_batch_size
+
+        # 将常量移到初始化中并移到指定设备
         self.gmr = 2.67e8
-        self._Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1)
-        self._delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1)
+        self._Delta = torch.cat((torch.ones(1, 8) * 19e-3, torch.ones(1, 8) * 49e-3), dim=1).to(device)
+        self._delta = torch.cat((torch.ones(1, 8) * 8e-3, torch.ones(1, 8) * 8e-3), dim=1).to(device)
         self._bvals = torch.tensor([50, 350, 800, 1500, 2400, 3450, 4750, 6000,
                                     200, 950, 2300, 4250, 6750, 9850, 13500, 17800],
-                                   dtype=torch.float64) * 1e6
+                                   dtype=torch.float64, device=device) * 1e6
+
+        # 预计算G
+        self.G = 1.0 / (self.gmr * self._delta) * torch.sqrt(self._bvals / (self._Delta - self._delta / 3))
+
+        # 初始化优化的SMT模型
+        from src import SMTAxonDiameterOptimized
+        self.smt_model = SMTAxonDiameterOptimized(device, max_batch_size)
 
     def compute_signal_from_coeff(self, coeffs: torch.tensor):
-        device = coeffs.device
+        """
+        计算信号，支持批处理
 
-        # 获取常量并移动到正确设备
-        Delta = self._Delta.to(device)
-        delta = self._delta.to(device)
-        bvals = self._bvals.to(device)
+        Args:
+            coeffs: 形状为 (batch_size, 4) 的系数张量
+                   每行包含 [f_r, adi_normalized, Dh_normalized, f_csf]
 
-        G = 1.0 / (self.gmr * delta) * torch.sqrt(bvals / (Delta - delta / 3))
-
-        # 缩放系数
-        coeffs_scaled = coeffs.clone()
-        coeffs_scaled[:, 1] = coeffs_scaled[:, 1] * 20e-6
-        coeffs_scaled[:, 2] = coeffs_scaled[:, 2] * 1.7e-9
-
-        # 使用批处理版本
-        sig_tensor = smt_axon_diameter_batch(bvals, Delta, delta, G, coeffs_scaled)
+        Returns:
+            sig_tensor: 形状为 (batch_size, n_directions) 的信号张量
+        """
+        # 使用优化的批处理版本
+        sig_tensor = self.smt_model.forward_batch(
+            self._bvals, self._Delta, self._delta, self.G, coeffs
+        )
         return sig_tensor
 
     def compute_negative_signal(self, coeffs: torch.Tensor):
-        return torch.zeros((1, 1))
+        """
+        计算负信号（用于正则化）
+
+        对于SMT模型，我们可以返回零张量或者实现一些物理约束
+        """
+        batch_size = coeffs.shape[0]
+        n_directions = self._bvals.shape[0]
+        return torch.zeros((batch_size, n_directions), device=self.device)
+
+    def reset_cache(self):
+        """重置SMT模型的缓存（在改变批次大小时可能需要）"""
+        if hasattr(self.smt_model, '_reset_cache'):
+            self.smt_model._reset_cache()
+
+    def get_parameter_bounds(self):
+        """
+        返回SMT模型参数的合理边界
+
+        Returns:
+            dict: 包含参数边界的字典
+        """
+        return {
+            'f_r': (0.0, 1.0),  # 受限分数
+            'adi': (0.1, 2.0),  # 轴突直径指数 (实际值会乘以20e-6)
+            'Dh': (0.1, 2.0),  # 受阻扩散系数 (实际值会乘以1.7e-9)
+            'f_csf': (0.0, 0.5),  # CSF分数
+        }
+
+    def validate_coeffs(self, coeffs: torch.Tensor):
+        """
+        验证输入系数的有效性
+
+        Args:
+            coeffs: 形状为 (batch_size, 4) 的系数张量
+
+        Returns:
+            bool: 系数是否有效
+        """
+        if coeffs.shape[1] != 4:
+            return False
+
+        bounds = self.get_parameter_bounds()
+
+        # 检查f_r边界
+        if torch.any(coeffs[:, 0] < bounds['f_r'][0]) or torch.any(coeffs[:, 0] > bounds['f_r'][1]):
+            return False
+
+        # 检查adi边界
+        if torch.any(coeffs[:, 1] < bounds['adi'][0]) or torch.any(coeffs[:, 1] > bounds['adi'][1]):
+            return False
+
+        # 检查Dh边界
+        if torch.any(coeffs[:, 2] < bounds['Dh'][0]) or torch.any(coeffs[:, 2] > bounds['Dh'][1]):
+            return False
+
+        # 检查f_csf边界
+        if torch.any(coeffs[:, 3] < bounds['f_csf'][0]) or torch.any(coeffs[:, 3] > bounds['f_csf'][1]):
+            return False
+
+        # 检查分数和约束: f_r + f_csf <= 1
+        if torch.any(coeffs[:, 0] + coeffs[:, 3] > 1.0):
+            return False
+
+        return True

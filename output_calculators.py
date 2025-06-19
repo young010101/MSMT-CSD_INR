@@ -66,7 +66,9 @@ def create_multishell(
 def create_von(
     cfg: dict, dataset: MultiShellDataset, device: str, **kwargs
 ) -> CoeffDiff:
-    diff_calculator = VonShell()
+    diff_calculator = VonShell(
+        device=device
+    )
     return CoeffDiff(diff_calculator)
     
 
