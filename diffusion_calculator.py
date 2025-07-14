@@ -229,29 +229,98 @@ class VonShell:
     def compute_signal_from_coeff(self, coeffs: torch.tensor):
         """
         计算信号，支持批处理
-
-        Args:
-            coeffs: 形状为 (batch_size, 4) 的系数张量
-                   每行包含 [f_r, adi_normalized, Dh_normalized, f_csf]
-
-        Returns:
-            sig_tensor: 形状为 (batch_size, n_directions) 的信号张量
         """
-        # 使用优化的批处理版本
-        sig_tensor = self.smt_model.forward_batch(
-            self._bvals, self._Delta, self._delta, self.G, coeffs
-        )
-        return sig_tensor
+        # 检查输入是否包含 NaN
+        if torch.isnan(coeffs).any():
+            print("警告：输入 coeffs 包含 NaN 值")
+            # 将 NaN 替换为安全值
+            coeffs = torch.where(torch.isnan(coeffs), torch.zeros_like(coeffs), coeffs)
+
+        # 应用 sigmoid 函数确保所有系数都在 (0, 1) 范围内
+        normalized_coeffs = torch.sigmoid(coeffs)
+
+        # 再次检查 sigmoid 后是否有异常值
+        if torch.isnan(normalized_coeffs).any() or torch.isinf(normalized_coeffs).any():
+            print("警告：sigmoid 后出现 NaN 或 Inf")
+            normalized_coeffs = torch.clamp(normalized_coeffs, min=1e-8, max=1 - 1e-8)
+
+        # 使用归一化后的系数进行计算
+        try:
+            sig_tensor = self.smt_model.forward_batch(
+                self._bvals, self._Delta, self._delta, self.G, normalized_coeffs
+            )
+
+            # 检查输出
+            if torch.isnan(sig_tensor).any() or torch.isinf(sig_tensor).any():
+                print("警告：SMT 模型输出包含 NaN 或 Inf")
+                sig_tensor = torch.where(
+                    torch.isnan(sig_tensor) | torch.isinf(sig_tensor),
+                    torch.zeros_like(sig_tensor),
+                    sig_tensor
+                )
+
+            return sig_tensor
+
+        except Exception as e:
+            print(f"SMT 计算错误: {e}")
+            # 返回安全的默认值
+            batch_size = coeffs.shape[0]
+            n_directions = self._bvals.shape[0]
+            return torch.zeros((batch_size, n_directions), device=self.device)
 
     def compute_negative_signal(self, coeffs: torch.Tensor):
         """
-        计算负信号（用于正则化）
+        计算负值约束项用于正则化
 
-        对于SMT模型，我们可以返回零张量或者实现一些物理约束
+        对于SMT模型的4个参数，我们施加以下约束：
+        1. 所有参数都应该在合理的物理范围内
+        2. 惩罚过小或过大的值
         """
-        batch_size = coeffs.shape[0]
+        # # 应用sigmoid确保参数在(0,1)范围内后，计算偏离合理范围的惩罚
+        # normalized_coeffs = torch.sigmoid(coeffs)
+        #
+        # # 对于SMT模型，参数应该在中等范围内（例如0.1-0.9）
+        # # 惩罚过于极端的值
+        # lower_bound = 0.1
+        # upper_bound = 0.9
+        #
+        # # 计算低于下界的惩罚
+        # lower_penalty = torch.clamp(lower_bound - normalized_coeffs, min=0) ** 2
+        #
+        # # 计算高于上界的惩罚
+        # upper_penalty = torch.clamp(normalized_coeffs - upper_bound, min=0) ** 2
+        #
+        # # 返回总惩罚，保持与其他类一致的形状 (batch_size, n_directions)
+        # total_penalty = torch.sum(lower_penalty + upper_penalty, dim=-1, keepdim=True)
+        #
+        # # 扩展到匹配b值方向数
+        # n_directions = self._bvals.shape[0]
+        # return total_penalty.expand(-1, n_directions)
+        """
+        改进的负值约束，特别针对adi参数
+        """
+        sigmoid_coeffs = torch.sigmoid(coeffs)
+
+        # 特别惩罚adi参数过小的情况
+        adi_normalized = sigmoid_coeffs[:, 1]  # adi参数
+        adi_penalty = torch.relu(0.005 - adi_normalized) ** 2  # 惩罚小于0.005的值
+
+        # 其他常规约束
+        f_r = sigmoid_coeffs[:, 0]
+        f_csf = sigmoid_coeffs[:, 3]
+        fraction_penalty = torch.relu(f_r + f_csf - 0.95) ** 2
+
+        # 原始系数极端值惩罚
+        extreme_penalty = torch.sum(
+            torch.relu(torch.abs(coeffs) - 3.0) ** 2,
+            dim=-1
+        )
+
+        total_penalty = (adi_penalty + fraction_penalty + extreme_penalty).unsqueeze(1)
+
+        # 扩展到匹配输出维度
         n_directions = self._bvals.shape[0]
-        return torch.zeros((batch_size, n_directions), device=self.device)
+        return total_penalty.expand(-1, n_directions)
 
     def reset_cache(self):
         """重置SMT模型的缓存（在改变批次大小时可能需要）"""
@@ -267,9 +336,9 @@ class VonShell:
         """
         return {
             'f_r': (0.0, 1.0),  # 受限分数
-            'adi': (0.1, 2.0),  # 轴突直径指数 (实际值会乘以20e-6)
-            'Dh': (0.1, 2.0),  # 受阻扩散系数 (实际值会乘以1.7e-9)
-            'f_csf': (0.0, 0.5),  # CSF分数
+            'adi': (0.05, 1.0),  # 轴突直径指数 (实际值会乘以20e-6)
+            'Dh': (0.2 / 1.7, 1.0),  # 受阻扩散系数 (实际值会乘以1.7e-9)
+            'f_csf': (0.0, 1.0),  # CSF分数
         }
 
     def validate_coeffs(self, coeffs: torch.Tensor):

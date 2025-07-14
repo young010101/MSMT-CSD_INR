@@ -18,7 +18,7 @@ depth: 145
 log_freq: 0 # number of iterations between logging, 0 for no logging
 
 paths: # from repository root
-  # mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  mask: /data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz
   fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
   fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
   response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
@@ -35,9 +35,9 @@ train_cfg:
   lpos: 5000 # number of positional encodings
   n_layers: 4
   hidden_dim: 1024
-  lr: 0.0001
-  epochs: 30
-  batch_size: 500
+  lr: 0.00001
+  epochs: 50
+  batch_size: 256
   lambda: 0 # deprecated, but necessary to put to a value
   slice_id: 45 # slice used for logging intermediate images
   sigma: 4 # sigma for gaussian used in fourier features encoding

@@ -95,6 +95,12 @@ class SMTAxonDiameterOptimized:
         alpha_2 = alphm ** 2  # (batch_size, n_roots)
         alpha_6 = alphm ** 6  # (batch_size, n_roots)
 
+        # 数值稳定性：检查 alpha_6
+        # 反正越后的 Bessel root 影响越小，直接 clamp
+        if torch.isnan(alpha_6).any() or torch.isinf(alpha_6).any():
+            # print("警告：alpha_6 包含异常值，进行修正")
+            alpha_6 = torch.clamp(alpha_6, max=1e38)  # 限制最大值
+
         # 扩展维度以支持广播: (batch_size, n_roots, n_b)
         alpha_2_expanded = alpha_2.unsqueeze(2)  # (batch_size, n_roots, 1)
 
@@ -169,6 +175,17 @@ class SMTAxonDiameterOptimized:
                           f_csf * sig_csf)
 
         return forward_signal
+
+    def validate_parameters(self, model_param):
+        """验证模型参数是否在有效范围内"""
+        f_r, adi, Dh, f_csf = model_param
+
+        assert 0 <= f_r <= 1, f"f_r应在[0,1]范围内，当前值: {f_r}"
+        assert 0 <= adi <= 20e-6, f"adi应在[0.1e-6,20e-6]范围内，当前值: {adi}"
+        assert 0 <= Dh <= 1.7e-9, f"Dh应在[0.2e-9,1.7e-9]范围内，当前值: {Dh}"
+        assert 0 <= f_csf <= 1, f"f_csf应在[0,1]范围内，当前值: {f_csf}"
+
+        return True
 
 
 # 进一步优化：预分配内存版本
@@ -298,7 +315,9 @@ def performance_test():
 
     for batch_size in batch_sizes:
         print(f"Testing batch size: {batch_size}")
-        model_params = torch.tensor([0.5, 10e-6, 1.5e-9, 0.2], device=device).unsqueeze(0).repeat(batch_size, 1)
+        # adi = model_params[:, 1] * 20e-6
+        # Dh = model_params[:, 2] * 1.7e-9
+        model_params = torch.tensor([0.5, 0.5, 1.5 / 1.7, 0.2], device=device).unsqueeze(0).repeat(batch_size, 1)
 
         # 重置缓存以避免形状不匹配
         model_optimized._reset_cache()

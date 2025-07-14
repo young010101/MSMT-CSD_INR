@@ -13,6 +13,7 @@ from output_calculators import OutputCalculator
 from utils import spherical_to_cartesian, parse_bvals, parse_mrtrix
 from datasets import create_input_space, DiffusionDataset, create_input_space_prop
 from dataclasses import dataclass
+from health_monitor import health_monitor
 
 
 @dataclass
@@ -34,6 +35,7 @@ class Trainer:
     scheduler: torch.optim.lr_scheduler.LRScheduler = None
     slice_id: int = 0
     grad_id: int = 0
+    patience: int = 10  # 早期停止的耐心值
 
     def __post_init__(self):
         self.wandb_log = self.log_freq > 0
@@ -41,11 +43,15 @@ class Trainer:
             wandb.watch(self.model, log="all", log_freq=self.log_freq)
 
         self.model.to(self.device)
+        self.health_monitor = health_monitor
 
     def train(self):
         avg_loss = []
-        for _ in range(self.epochs):
+        for epoch in range(self.epochs):
             losses = []
+            best_loss = float('inf')
+            patience_counter = 0
+            step = 0
             for i, (_input, labels) in enumerate(tqdm(self.dataloader)):
                 self.model.train()
                 _input = _input.to(self.device)
@@ -57,6 +63,36 @@ class Trainer:
                     _input
                 )  # [B, n_dir*3] Theta, Phi, volume fraction
 
+                # 🔍 实时健康监控
+                health_stats = self.health_monitor.analyze_model_output(model_out, step)
+
+                # 根据健康评分决定是否打印详细报告
+                if health_stats['health_score'] < 70:
+                # if step % 10 == 0 or health_stats['health_score'] < 70:
+                        self.health_monitor.print_health_report(health_stats)
+
+                # 健康评分过低时的紧急措施
+                if health_stats['health_score'] < 30:
+                    print("🚨 健康评分过低，执行紧急干预！")
+                    self._emergency_intervention()
+                    continue
+
+                # 检查模型输出
+                if torch.isnan(model_out).any():
+                    print(f"警告：模型输出包含 NaN，第 {epoch} 轮第 {i} 批次")
+                    print(
+                        f"模型输出统计: min={model_out.min():.6f}, max={model_out.max():.6f}, mean={model_out.mean():.6f}")
+
+                    # 重新初始化模型参数
+                    def reinit_weights(m):
+                        if isinstance(m, torch.nn.Linear):
+                            torch.nn.init.xavier_uniform_(m.weight, gain=0.01)
+                            torch.nn.init.zeros_(m.bias)
+
+                    print("重新初始化模型参数...")
+                    self.model.apply(reinit_weights)
+                    continue
+
                 # todo: map and (fh, fr, a, Dh)
                 output, kwargs = self.output_calculator.output_from_model_out(model_out)
                 loss = self.loss_fn(output, labels, **kwargs)
@@ -67,8 +103,24 @@ class Trainer:
 
                 loss_item = loss.item()
                 losses.append(loss_item)
+                step += 1
 
             mean_loss = np.array(losses).mean()
+
+            # 早期停止检查
+            if mean_loss < best_loss:
+                best_loss = mean_loss
+                patience_counter = 0
+                # 保存最佳模型
+                torch.save(self.model.state_dict(), 'best_model.pth')
+            else:
+                patience_counter += 1
+
+            if patience_counter >= self.patience:
+                print(f"早期停止在第 {epoch} 轮，最佳损失: {best_loss:.6f}")
+                # 加载最佳模型
+                self.model.load_state_dict(torch.load('best_model.pth'))
+                break
 
             if self.wandb_log:
                 wandb.log({"loss": mean_loss})

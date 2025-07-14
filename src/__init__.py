@@ -2,4 +2,4 @@ from .smt_axon_diameter_origin import smt_axon_diameter, gmr
 from .smt_axon_diameter_origin import restricted_compartment, hindered_compartment, csf_compartment
 
 # from .smt_axon_diameter_tensor import smt_axon_diameter as smt_axon_diameter_tensor
-from .test_parallel2 import SMTAxonDiameterOptimized
+from .smt_axon_diameter_batch import SMTAxonDiameterOptimized

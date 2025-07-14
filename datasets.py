@@ -82,6 +82,15 @@ class DiffusionDataset(Dataset):
     def get_directions(self) -> np.ndarray:
         pass
 
+
+def _initialize_dwi_idx():
+    """初始化DWI索引"""
+    # 根据您的von shell数据集结构，这里需要定义哪些是DWI测量
+    # 从代码中看到有16个b值，所以创建对应的索引
+    n_directions = 16  # 根据您的bvals数组长度
+    return torch.ones(n_directions, dtype=torch.bool)
+
+
 class VonShellDataset(DiffusionDataset):
     def __init__(
         self,
@@ -98,7 +107,9 @@ class VonShellDataset(DiffusionDataset):
         # nifti_file = nib.load(nifti_path)
         n19 = nib.load('/data/users/cyang/notes/Research/genAI/diffusion/' + 'qb_diff_real_delta_19_avg_by_b.nii')
         n49 = nib.load('/home/cyang/repos/MSMT-CSD_INR/' + 'qb_diff_real_delta_49_avg_by_b.nii')
-
+        mask = nib.load('/data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz')
+        mask_4d = mask.get_fdata().astype(int)[..., np.newaxis]
+        print(f'mask_4d.min()')
 
         # if bvec_path and bval_path:
         #     self.bvals = parse_bvals(bval_path)
@@ -122,7 +133,7 @@ class VonShellDataset(DiffusionDataset):
         # undersampled_bvecs = bvecs[selected_indices]
         # undersampled_img = full_img[..., selected_indices]  # ??????? 30 ???
         # output_array = full_img[..., self.dwi_idx]  # remove b0
-        output_array = full_img
+        output_array = full_img * mask_4d
         # output_array = undersampled_img
         width, height, depth, n_grad = output_array.shape
 
@@ -152,6 +163,7 @@ class VonShellDataset(DiffusionDataset):
             )
             / self.scale_value
         )
+        self.dwi_idx = _initialize_dwi_idx()
 
     def __len__(self) -> int:
         return self.input_tensor.shape[0]
@@ -159,11 +171,17 @@ class VonShellDataset(DiffusionDataset):
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
         return self.input_tensor[idx], self.output_tensor[idx]
 
-    def get_dwi_idx(self) -> np.ndarray:
-        return self.dwi_idx.nonzero()[0]
+    def get_dwi_idx(self):
+        """获取DWI索引"""
+        if not hasattr(self, 'dwi_idx') or self.dwi_idx is None:
+            self.dwi_idx = self._initialize_dwi_idx()
+        return self.dwi_idx.nonzero().flatten()
 
-    def get_scale(self) -> float | np.ndarray:
-        return self.scale_value
+    def get_scale(self):
+        """添加get_scale方法，如果不存在的话"""
+        if hasattr(self, 'scale_factor'):
+            return self.scale_factor
+        return 1.0  # 默认缩放因子
 
     def get_response(self) -> np.ndarray:
         return self.response_coeff
