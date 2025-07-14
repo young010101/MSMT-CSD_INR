@@ -1,6 +1,9 @@
 from typing import Callable
 from functools import partial
+import torch
 import torch.nn
+import torch.nn.functional as F
+from numerical_stability import LossStabilizer, NumericalStabilizer
 
 
 def neg_con_mse_loss(
@@ -32,6 +35,69 @@ def neg_con_mse_loss_ms(
     return loss
 
 
+def stable_neg_con_mse_loss(
+    output: torch.Tensor,
+    labels: torch.Tensor,
+    neg_values: torch.Tensor,
+    _lambda: torch.Tensor,
+    stabilizer: LossStabilizer = None,
+    *args,
+    **kwargs
+) -> torch.Tensor:
+    """数值稳定的负约束MSE损失"""
+    if stabilizer is None:
+        stabilizer = LossStabilizer()
+    
+    # 检查输入
+    output = torch.clamp(output, -100, 100)
+    labels = torch.clamp(labels, -100, 100)
+    neg_values = torch.clamp(neg_values, -100, 100)
+    
+    # 使用稳定的MSE损失
+    main_loss = stabilizer.stabilize_mse_loss(output, labels)
+    
+    # 负值约束损失
+    neg_loss = torch.mean(neg_values ** 2)
+    
+    # 总损失
+    total_loss = main_loss + neg_loss
+    
+    # 稳定损失
+    return stabilizer.stabilize_loss(total_loss)
+
+
+def stable_neg_con_mse_loss_ms(
+    output: torch.Tensor,
+    labels: torch.Tensor,
+    neg_values: torch.Tensor,
+    _lambda: torch.Tensor,
+    stabilizer: LossStabilizer = None,
+    *args,
+    **kwargs
+) -> torch.Tensor:
+    """数值稳定的多壳负约束MSE损失"""
+    if stabilizer is None:
+        stabilizer = LossStabilizer()
+    
+    # 检查输入
+    output = torch.clamp(output, -100, 100)
+    labels = torch.clamp(labels, -100, 100)
+    neg_values = torch.clamp(neg_values, -100, 100)
+    
+    n_grads = (labels.shape[-1] - 1) / 2
+    loss = (output - labels) ** 2
+    
+    # 对b0进行加权
+    if loss.shape[-1] > 0:
+        loss[:, -1] = loss[:, -1] * n_grads
+    
+    main_loss = loss.mean()
+    neg_loss = torch.mean(neg_values ** 2)
+    
+    total_loss = main_loss + neg_loss
+    return stabilizer.stabilize_loss(total_loss)
+
+
 def create_neg_con_mse_loss(cfg: dict, *args, **kwargs) -> Callable:
     _lambda = torch.tensor(cfg["train_cfg"]["lambda"], dtype=torch.float)
     return partial(neg_con_mse_loss, _lambda=_lambda)
@@ -42,9 +108,25 @@ def create_neg_con_mse_loss_ms(cfg: dict, *args, **kwargs) -> Callable:
     return partial(neg_con_mse_loss_ms, _lambda=_lambda)
 
 
+def create_stable_neg_con_mse_loss(cfg: dict, *args, **kwargs) -> Callable:
+    """创建稳定的负约束MSE损失函数"""
+    _lambda = torch.tensor(cfg["train_cfg"]["lambda"], dtype=torch.float)
+    stabilizer = LossStabilizer()
+    return partial(stable_neg_con_mse_loss, _lambda=_lambda, stabilizer=stabilizer)
+
+
+def create_stable_neg_con_mse_loss_ms(cfg: dict, *args, **kwargs) -> Callable:
+    """创建稳定的多壳负约束MSE损失函数"""
+    _lambda = torch.tensor(cfg["train_cfg"]["lambda"], dtype=torch.float)
+    stabilizer = LossStabilizer()
+    return partial(stable_neg_con_mse_loss_ms, _lambda=_lambda, stabilizer=stabilizer)
+
+
 LOSS_FUNCTIONS = {
     "singleshell_csd_loss": create_neg_con_mse_loss,
     "multishell_csd_loss": create_neg_con_mse_loss_ms,
+    "stable_singleshell_csd_loss": create_stable_neg_con_mse_loss,
+    "stable_multishell_csd_loss": create_stable_neg_con_mse_loss_ms,
 }
 
 

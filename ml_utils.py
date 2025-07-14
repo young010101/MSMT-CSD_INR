@@ -47,65 +47,83 @@ class Trainer:
 
     def train(self):
         avg_loss = []
+        best_loss = float('inf')
+        patience_counter = 0
+        
         for epoch in range(self.epochs):
             losses = []
-            best_loss = float('inf')
-            patience_counter = 0
             step = 0
+            
             for i, (_input, labels) in enumerate(tqdm(self.dataloader)):
                 self.model.train()
                 _input = _input.to(self.device)
-
                 labels = labels.to(self.device)
+                
+                # 检查输入数据
+                if torch.isnan(_input).any() or torch.isinf(_input).any():
+                    print(f"警告：输入数据包含 NaN 或 Inf，跳过此批次")
+                    continue
+                
+                if torch.isnan(labels).any() or torch.isinf(labels).any():
+                    print(f"警告：标签数据包含 NaN 或 Inf，跳过此批次")
+                    continue
+                
                 self.optimizer.zero_grad()
-
-                model_out = self.model(
-                    _input
-                )  # [B, n_dir*3] Theta, Phi, volume fraction
-
-                # 🔍 实时健康监控
-                health_stats = self.health_monitor.analyze_model_output(model_out, step)
-
-                # 根据健康评分决定是否打印详细报告
-                if health_stats['health_score'] < 70:
-                # if step % 10 == 0 or health_stats['health_score'] < 70:
-                        self.health_monitor.print_health_report(health_stats)
-
-                # 健康评分过低时的紧急措施
-                if health_stats['health_score'] < 30:
-                    print("🚨 健康评分过低，执行紧急干预！")
-                    self._emergency_intervention()
-                    continue
-
+                
+                model_out = self.model(_input)
+                
                 # 检查模型输出
-                if torch.isnan(model_out).any():
-                    print(f"警告：模型输出包含 NaN，第 {epoch} 轮第 {i} 批次")
-                    print(
-                        f"模型输出统计: min={model_out.min():.6f}, max={model_out.max():.6f}, mean={model_out.mean():.6f}")
-
-                    # 重新初始化模型参数
-                    def reinit_weights(m):
-                        if isinstance(m, torch.nn.Linear):
-                            torch.nn.init.xavier_uniform_(m.weight, gain=0.01)
-                            torch.nn.init.zeros_(m.bias)
-
-                    print("重新初始化模型参数...")
-                    self.model.apply(reinit_weights)
+                if torch.isnan(model_out).any() or torch.isinf(model_out).any():
+                    print(f"警告：模型输出包含 NaN 或 Inf，跳过此批次")
                     continue
-
-                # todo: map and (fh, fr, a, Dh)
+                
+                # 计算输出和损失
                 output, kwargs = self.output_calculator.output_from_model_out(model_out)
+                
+                # 检查输出计算结果
+                if torch.isnan(output).any() or torch.isinf(output).any():
+                    print(f"警告：输出计算结果包含 NaN 或 Inf，跳过此批次")
+                    continue
+                
                 loss = self.loss_fn(output, labels, **kwargs)
-
+                
+                # 检查损失
+                if torch.isnan(loss) or torch.isinf(loss):
+                    print(f"警告：损失为 NaN 或 Inf，跳过此批次")
+                    continue
+                
                 loss.backward()
-                # torch.nn.utils.clip_grad_value_(self.model.parameters(), 0.5)
+                
+                # 检查梯度
+                total_norm = 0
+                for p in self.model.parameters():
+                    if p.grad is not None:
+                        param_norm = p.grad.data.norm(2)
+                        total_norm += param_norm.item() ** 2
+                        if torch.isnan(p.grad).any() or torch.isinf(p.grad).any():
+                            print(f"警告：梯度包含 NaN 或 Inf，跳过此批次")
+                            self.optimizer.zero_grad()
+                            continue
+                
+                total_norm = total_norm ** (1. / 2)
+                
+                # 梯度裁剪
+                if total_norm > 1.0:
+                    torch.nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+                
                 self.optimizer.step()
-
+                
                 loss_item = loss.item()
                 losses.append(loss_item)
                 step += 1
 
+            if len(losses) == 0:
+                print(f"第 {epoch} 轮没有有效的批次，跳过此轮")
+                continue
+                
             mean_loss = np.array(losses).mean()
+            
+            print(f"Epoch {epoch}: loss = {mean_loss:.6f}")
 
             # 早期停止检查
             if mean_loss < best_loss:
