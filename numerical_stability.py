@@ -8,154 +8,141 @@ import torch.nn as nn
 import torch.nn.functional as F
 import numpy as np
 from typing import Dict, Any, Tuple, Optional
+import warnings
 
 
 class NumericalStabilizer:
-    """数值稳定性管理器"""
+    """数值稳定性监控器和修复器"""
     
-    def __init__(self, eps: float = 1e-8, max_val: float = 1e6):
+    def __init__(self, 
+                 max_loss_threshold: float = 100.0,
+                 max_grad_norm: float = 0.5,
+                 eps: float = 1e-8,
+                 enable_logging: bool = True):
+        self.max_loss_threshold = max_loss_threshold
+        self.max_grad_norm = max_grad_norm
         self.eps = eps
-        self.max_val = max_val
-        
-    def stabilize_tensor(self, tensor: torch.Tensor, name: str = "tensor") -> torch.Tensor:
-        """稳定张量数值"""
-        if torch.isnan(tensor).any():
-            print(f"警告: {name} 包含 NaN，已替换为0")
-            tensor = torch.where(torch.isnan(tensor), torch.zeros_like(tensor), tensor)
-            
-        if torch.isinf(tensor).any():
-            print(f"警告: {name} 包含 Inf，已裁剪")
-            tensor = torch.clamp(tensor, -self.max_val, self.max_val)
-            
-        return tensor
-        
-    def safe_log(self, x: torch.Tensor) -> torch.Tensor:
-        """安全的对数运算"""
-        return torch.log(torch.clamp(x, min=self.eps))
-        
-    def safe_sqrt(self, x: torch.Tensor) -> torch.Tensor:
-        """安全的平方根运算"""
-        return torch.sqrt(torch.clamp(x, min=self.eps))
-        
-    def safe_divide(self, numerator: torch.Tensor, denominator: torch.Tensor) -> torch.Tensor:
-        """安全的除法运算"""
-        return numerator / torch.clamp(denominator, min=self.eps)
-        
-    def safe_exp(self, x: torch.Tensor) -> torch.Tensor:
-        """安全的指数运算"""
-        return torch.exp(torch.clamp(x, max=20))  # 防止exp爆炸
-
-
-class ModelInitializer:
-    """模型初始化器"""
-    
-    @staticmethod
-    def xavier_uniform_scaled(tensor: torch.Tensor, gain: float = 0.1):
-        """缩放的Xavier均匀初始化"""
-        nn.init.xavier_uniform_(tensor, gain=gain)
-        
-    @staticmethod
-    def normal_scaled(tensor: torch.Tensor, std: float = 0.01):
-        """缩放的正态初始化"""
-        nn.init.normal_(tensor, mean=0.0, std=std)
-        
-    @staticmethod
-    def orthogonal_scaled(tensor: torch.Tensor, gain: float = 0.1):
-        """缩放的正交初始化"""
-        nn.init.orthogonal_(tensor, gain=gain)
-        
-    @classmethod
-    def init_model_safe(cls, model: nn.Module, method: str = "xavier"):
-        """安全初始化模型"""
-        for name, param in model.named_parameters():
-            if param.dim() >= 2:
-                if method == "xavier":
-                    cls.xavier_uniform_scaled(param.data, gain=0.1)
-                elif method == "normal":
-                    cls.normal_scaled(param.data, std=0.01)
-                elif method == "orthogonal":
-                    cls.orthogonal_scaled(param.data, gain=0.1)
-            else:
-                nn.init.zeros_(param.data)
-                
-            print(f"初始化 {name}: mean={param.data.mean():.6f}, std={param.data.std():.6f}")
-
-
-class GradientProcessor:
-    """梯度处理器"""
-    
-    def __init__(self, max_norm: float = 1.0, eps: float = 1e-8):
-        self.max_norm = max_norm
-        self.eps = eps
-        
-    def check_gradients(self, model: nn.Module) -> Dict[str, Any]:
-        """检查梯度状态"""
-        stats = {
-            "total_norm": 0.0,
-            "nan_count": 0,
-            "inf_count": 0,
-            "zero_count": 0,
-            "param_count": 0
+        self.enable_logging = enable_logging
+        self.stats = {
+            'nan_detected': 0,
+            'inf_detected': 0,
+            'loss_exploded': 0,
+            'grad_exploded': 0,
+            'params_corrected': 0
         }
+    
+    def log_warning(self, message: str):
+        """记录警告信息"""
+        if self.enable_logging:
+            print(f"数值稳定性警告: {message}")
+    
+    def check_and_fix_tensor(self, tensor: torch.Tensor, name: str = "tensor") -> torch.Tensor:
+        """检查并修复张量中的数值问题"""
+        if tensor is None:
+            return tensor
+            
+        original_shape = tensor.shape
         
+        # 检查NaN
+        if torch.isnan(tensor).any():
+            self.stats['nan_detected'] += 1
+            self.log_warning(f"{name} 包含 NaN 值，进行修正")
+            tensor = torch.where(torch.isnan(tensor), torch.zeros_like(tensor), tensor)
+        
+        # 检查Inf
+        if torch.isinf(tensor).any():
+            self.stats['inf_detected'] += 1
+            self.log_warning(f"{name} 包含 Inf 值，进行修正")
+            tensor = torch.where(torch.isinf(tensor), torch.zeros_like(tensor), tensor)
+        
+        # 检查极端值
+        if torch.abs(tensor).max() > 1e10:
+            self.log_warning(f"{name} 包含极端值，进行裁剪")
+            tensor = torch.clamp(tensor, min=-1e10, max=1e10)
+        
+        return tensor
+    
+    def check_loss(self, loss: torch.Tensor) -> bool:
+        """检查损失值是否合理"""
+        if torch.isnan(loss) or torch.isinf(loss):
+            self.stats['loss_exploded'] += 1
+            self.log_warning("损失为 NaN 或 Inf")
+            return False
+        
+        if loss.item() > self.max_loss_threshold:
+            self.stats['loss_exploded'] += 1
+            self.log_warning(f"损失值过大: {loss.item():.2e}")
+            return False
+        
+        return True
+    
+    def check_gradients(self, model: torch.nn.Module) -> bool:
+        """检查梯度是否合理"""
+        total_norm = 0
+        param_count = 0
+        
+        for p in model.parameters():
+            if p.grad is not None:
+                # 检查梯度中的NaN/Inf
+                if torch.isnan(p.grad).any() or torch.isinf(p.grad).any():
+                    self.stats['grad_exploded'] += 1
+                    self.log_warning(f"参数梯度包含 NaN 或 Inf")
+                    return False
+                
+                # 计算梯度范数
+                param_norm = p.grad.data.norm(2)
+                total_norm += param_norm.item() ** 2
+                param_count += 1
+        
+        if param_count > 0:
+            total_norm = total_norm ** (1. / 2)
+            if total_norm > self.max_grad_norm:
+                self.stats['grad_exploded'] += 1
+                self.log_warning(f"梯度范数过大: {total_norm:.4f}")
+                return False
+        
+        return True
+    
+    def apply_gradient_clipping(self, model: torch.nn.Module):
+        """应用梯度裁剪"""
+        torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=self.max_grad_norm)
+    
+    def check_model_parameters(self, model: torch.nn.Module) -> bool:
+        """检查模型参数是否合理"""
         for name, param in model.named_parameters():
-            if param.grad is not None:
-                grad = param.grad.data
-                stats["param_count"] += 1
+            if torch.isnan(param.data).any() or torch.isinf(param.data).any():
+                self.stats['params_corrected'] += 1
+                self.log_warning(f"模型参数 {name} 包含异常值，进行修正")
                 
-                # 检查NaN
-                if torch.isnan(grad).any():
-                    stats["nan_count"] += 1
-                    print(f"梯度 {name} 包含 NaN")
-                    
-                # 检查Inf
-                if torch.isinf(grad).any():
-                    stats["inf_count"] += 1
-                    print(f"梯度 {name} 包含 Inf")
-                    
-                # 检查零梯度
-                if grad.norm() < self.eps:
-                    stats["zero_count"] += 1
-                    print(f"梯度 {name} 接近零")
-                    
-                # 计算范数
-                param_norm = grad.norm(2)
-                stats["total_norm"] += param_norm.item() ** 2
+                # 重新初始化有问题的参数
+                if param.dim() == 2:
+                    torch.nn.init.xavier_uniform_(param.data, gain=0.01)
+                else:
+                    torch.nn.init.zeros_(param.data)
                 
-        stats["total_norm"] = stats["total_norm"] ** 0.5
-        return stats
+                return False
         
-    def fix_gradients(self, model: nn.Module) -> bool:
-        """修复异常梯度"""
-        fixed_count = 0
-        
-        for name, param in model.named_parameters():
-            if param.grad is not None:
-                grad = param.grad.data
-                
-                # 修复NaN
-                if torch.isnan(grad).any():
-                    param.grad.data = torch.where(torch.isnan(grad), 
-                                                torch.zeros_like(grad), grad)
-                    fixed_count += 1
-                    
-                # 修复Inf
-                if torch.isinf(grad).any():
-                    param.grad.data = torch.clamp(grad, -100, 100)
-                    fixed_count += 1
-                    
-        return fixed_count > 0
-        
-    def clip_gradients(self, model: nn.Module) -> float:
-        """裁剪梯度"""
-        total_norm = torch.nn.utils.clip_grad_norm_(model.parameters(), self.max_norm)
-        return total_norm.item()
+        return True
+    
+    def get_stats(self) -> Dict[str, int]:
+        """获取统计信息"""
+        return self.stats.copy()
+    
+    def reset_stats(self):
+        """重置统计信息"""
+        self.stats = {
+            'nan_detected': 0,
+            'inf_detected': 0,
+            'loss_exploded': 0,
+            'grad_exploded': 0,
+            'params_corrected': 0
+        }
 
 
 class LossStabilizer:
     """损失稳定器"""
     
-    def __init__(self, eps: float = 1e-8, max_loss: float = 1000.0):
+    def __init__(self, eps: float = 1e-8, max_loss: float = 100.0):
         self.eps = eps
         self.max_loss = max_loss
         
@@ -185,134 +172,114 @@ class LossStabilizer:
         return torch.clamp(loss, max=self.max_loss)
 
 
-class ActivationStabilizer:
-    """激活函数稳定器"""
+class OptimizerStabilizer:
+    """优化器稳定器"""
     
-    @staticmethod
-    def stable_softmax(x: torch.Tensor, dim: int = -1) -> torch.Tensor:
-        """稳定的softmax"""
-        x_max = torch.max(x, dim=dim, keepdim=True)[0]
-        exp_x = torch.exp(x - x_max)
-        return exp_x / torch.sum(exp_x, dim=dim, keepdim=True)
+    def __init__(self, 
+                 base_lr: float = 1e-4,
+                 warmup_epochs: int = 3,
+                 min_lr: float = 1e-7,
+                 weight_decay: float = 1e-6):
+        self.base_lr = base_lr
+        self.warmup_epochs = warmup_epochs
+        self.min_lr = min_lr
+        self.weight_decay = weight_decay
+    
+    def create_stable_optimizer(self, model: torch.nn.Module) -> torch.optim.Optimizer:
+        """创建稳定的优化器"""
+        return torch.optim.AdamW(
+            model.parameters(),
+            lr=self.base_lr,
+            weight_decay=self.weight_decay,
+            eps=1e-8,
+            betas=(0.9, 0.999)
+        )
+    
+    def get_lr_scale(self, epoch: int) -> float:
+        """获取学习率缩放因子"""
+        if epoch < self.warmup_epochs:
+            # 学习率预热
+            return (epoch + 1) / self.warmup_epochs
+        else:
+            # 学习率衰减
+            return max(0.1, 0.99 ** (epoch - self.warmup_epochs))
+    
+    def update_learning_rate(self, optimizer: torch.optim.Optimizer, epoch: int):
+        """更新学习率"""
+        lr_scale = self.get_lr_scale(epoch)
+        new_lr = max(self.base_lr * lr_scale, self.min_lr)
         
-    @staticmethod
-    def stable_relu(x: torch.Tensor, max_val: float = 20.0) -> torch.Tensor:
-        """稳定的ReLU"""
-        return torch.clamp(F.relu(x), max=max_val)
-        
-    @staticmethod
-    def stable_tanh(x: torch.Tensor) -> torch.Tensor:
-        """稳定的tanh"""
-        return torch.tanh(torch.clamp(x, -10, 10))
-        
-    @staticmethod
-    def stable_sigmoid(x: torch.Tensor) -> torch.Tensor:
-        """稳定的sigmoid"""
-        return torch.sigmoid(torch.clamp(x, -10, 10))
+        for param_group in optimizer.param_groups:
+            param_group['lr'] = new_lr
 
 
 class TrainingMonitor:
     """训练监控器"""
     
-    def __init__(self, window_size: int = 100):
-        self.window_size = window_size
-        self.loss_history = []
-        self.nan_count = 0
-        self.inf_count = 0
-        
-    def update(self, loss: float, has_nan: bool = False, has_inf: bool = False):
-        """更新监控状态"""
-        self.loss_history.append(loss)
-        if len(self.loss_history) > self.window_size:
-            self.loss_history.pop(0)
-            
-        if has_nan:
-            self.nan_count += 1
-        if has_inf:
-            self.inf_count += 1
-            
-    def get_stats(self) -> Dict[str, Any]:
-        """获取监控统计"""
-        if not self.loss_history:
-            return {}
-            
-        losses = np.array(self.loss_history)
-        return {
-            "mean_loss": losses.mean(),
-            "std_loss": losses.std(),
-            "min_loss": losses.min(),
-            "max_loss": losses.max(),
-            "nan_count": self.nan_count,
-            "inf_count": self.inf_count,
-            "loss_trend": losses[-10:].mean() - losses[:10].mean() if len(losses) >= 20 else 0
-        }
-        
-    def is_training_stable(self) -> bool:
-        """检查训练是否稳定"""
-        if len(self.loss_history) < 20:
-            return True
-            
-        recent_losses = self.loss_history[-10:]
-        return all(loss < 1000 for loss in recent_losses) and self.nan_count == 0
-
-
-# 工具函数
-def create_stable_optimizer(model: nn.Module, lr: float = 1e-4, weight_decay: float = 1e-6) -> torch.optim.Optimizer:
-    """创建稳定的优化器"""
-    return torch.optim.AdamW(
-        model.parameters(),
-        lr=lr,
-        weight_decay=weight_decay,
-        eps=1e-8,
-        betas=(0.9, 0.999)
-    )
-
-
-def create_stable_scheduler(optimizer: torch.optim.Optimizer, 
-                          factor: float = 0.8, 
-                          patience: int = 10) -> torch.optim.lr_scheduler.ReduceLROnPlateau:
-    """创建稳定的学习率调度器"""
-    return torch.optim.lr_scheduler.ReduceLROnPlateau(
-        optimizer,
-        mode='min',
-        factor=factor,
-        patience=patience,
-        verbose=True,
-        threshold=1e-6,
-        threshold_mode='rel',
-        cooldown=5,
-        min_lr=1e-7,
-        eps=1e-8
-    )
-
-
-def diagnose_model_health(model: nn.Module) -> Dict[str, Any]:
-    """诊断模型健康状况"""
-    health_report = {
-        "total_params": 0,
-        "nan_params": 0,
-        "inf_params": 0,
-        "zero_params": 0,
-        "param_stats": {}
-    }
+    def __init__(self, patience: int = 10, min_improvement: float = 1e-6):
+        self.patience = patience
+        self.min_improvement = min_improvement
+        self.best_loss = float('inf')
+        self.patience_counter = 0
+        self.training_history = []
     
-    for name, param in model.named_parameters():
-        health_report["total_params"] += param.numel()
+    def update(self, loss: float) -> Dict[str, Any]:
+        """更新监控状态"""
+        self.training_history.append(loss)
         
-        if torch.isnan(param).any():
-            health_report["nan_params"] += torch.isnan(param).sum().item()
-            
-        if torch.isinf(param).any():
-            health_report["inf_params"] += torch.isinf(param).sum().item()
-            
-        if param.abs().max() < 1e-8:
-            health_report["zero_params"] += param.numel()
-            
-        health_report["param_stats"][name] = {
-            "mean": param.data.mean().item(),
-            "std": param.data.std().item(),
-            "min": param.data.min().item(),
-            "max": param.data.max().item()
+        if loss < self.best_loss - self.min_improvement:
+            self.best_loss = loss
+            self.patience_counter = 0
+            should_stop = False
+            improved = True
+        else:
+            self.patience_counter += 1
+            should_stop = self.patience_counter >= self.patience
+            improved = False
+        
+        return {
+            'should_stop': should_stop,
+            'improved': improved,
+            'best_loss': self.best_loss,
+            'patience_counter': self.patience_counter
         }
+    
+    def get_stats(self) -> Dict[str, Any]:
+        """获取训练统计信息"""
+        if not self.training_history:
+            return {}
         
-    return health_report
+        return {
+            'current_loss': self.training_history[-1],
+            'best_loss': self.best_loss,
+            'mean_loss': np.mean(self.training_history[-10:]),  # 最近10次的平均
+            'loss_std': np.std(self.training_history[-10:]),
+            'total_steps': len(self.training_history)
+        }
+
+
+def create_stable_training_environment():
+    """创建稳定的训练环境"""
+    # 设置PyTorch的数值稳定性
+    torch.set_default_dtype(torch.float32)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False
+    
+    # 忽略警告
+    warnings.filterwarnings('ignore', category=UserWarning)
+    warnings.filterwarnings('ignore', category=RuntimeWarning)
+    
+    # 设置随机种子
+    torch.manual_seed(42)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(42)
+        torch.cuda.manual_seed_all(42)
+    
+    np.random.seed(42)
+    
+    return {
+        'numerical_stabilizer': NumericalStabilizer(),
+        'loss_stabilizer': LossStabilizer(),
+        'optimizer_stabilizer': OptimizerStabilizer(),
+        'training_monitor': TrainingMonitor()
+    }

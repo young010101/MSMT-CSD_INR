@@ -1,0 +1,93 @@
+
+project_name: von_shell_stable # project name for logging using wandb (wandb.ai), uncomment in main.py
+
+model_name: stable_fod_nesh # see models.py, using stable version
+output_calculator: von_shell # see output_calculators.py
+loss_function_name: stable_singleshell_csd_loss # see loss_functions.py, using stable version
+gaussian_encoding: True # use fourier features encoding
+fod_rescale: True # multiply with rescaling factor after convolution of FOD and response
+dataset_name: von_shell # see datasets.py
+bval_delta: 100 # values between the shell defined below +- bval_delta are included for the shell
+shells: [3000] # which bval shell to use
+scale_data: True # scale the dwi to 0-1 range before fitting
+scheduler: True # use a learning rate schedular
+
+# Dimensions from von_shell config
+width: 145
+height: 174
+depth: 145
+
+# Logging frequency from stable config
+log_freq: 50
+
+# Paths from von_shell config, with updated output path
+paths: # from repository root
+  mask: /data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz
+  fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
+  fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+  wm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+  gm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_gm.txt
+  csf_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_csf.txt
+  nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  output: runs/mwu100408_von_stable
+
+# Training config merged from stable and von_shell
+train_cfg:
+  lmax: 8
+  lpos: 10 # from stable_config
+  n_layers: 11 # from stable_config
+  hidden_dim: 256 # from stable_config
+  lr: 0.0001 # from stable_config
+  epochs: 200 # from stable_config
+  batch_size: 512 # from stable_config
+  lambda_: 0.1 # from stable_config, note the underscore
+  slice_id: 45 # from von_shell_config
+  sigma: 5.0 # from stable_config
+  gaussian: True # from von_shell_config
+  dropout_rate: 0.1  # from stable_config
+  max_freq: 5.0  # from stable_config
+  weight_decay: 0.000001 # from stable_config
+
+# Numerical stability config from stable_config
+stability:
+  max_grad_norm: 1.0
+  gradient_clip_type: "norm"
+  warmup_epochs: 5
+  warmup_factor: 0.1
+  patience: 15
+  min_delta: 1e-6
+  optimizer: "adamw"
+  eps: 1e-8
+  betas: [0.9, 0.999]
+  scheduler: "reduce_on_plateau"
+  scheduler_factor: 0.8
+  scheduler_patience: 10
+  scheduler_min_lr: 1e-7
+
+# Monitoring config from stable_config
+wandb_project: "stable_training"
+
+# Data processing config from stable_config
+data_processing:
+  normalize_input: true
+  normalize_output: true
+  clip_outliers: true
+  outlier_threshold: 3.0
+
+# Model initialization config from stable_config
+model_init:
+  method: "xavier"
+  gain: 0.1
+  bias_init: "zero"
+
+# Fault recovery config from stable_config
+recovery:
+  enable_auto_recovery: true
+  max_consecutive_nan: 3
+  recovery_method: "partial_reset"
+
+# FOD rescale from von_shell config
+fod_rescale: True

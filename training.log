@@ -1,0 +1,11 @@
+使用设备: cuda
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/run_stable_training.py", line 227, in <module>
+    model, losses = run_stable_training(args.config_file)
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/run_stable_training.py", line 103, in run_stable_training
+    model = create_stable_model(cfg)
+            ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/run_stable_training.py", line 63, in create_stable_model
+    raise ValueError(f"未知的模型类型: {model_name}")
+ValueError: 未知的模型类型: von_mises_model

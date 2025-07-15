@@ -1,0 +1,90 @@
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_setup.py:_flush():68] Current SDK version is 0.19.10
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_setup.py:_flush():68] Configure stats pid to 43736
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_setup.py:_flush():68] Loading settings from /home/cyang/.config/wandb/settings
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_setup.py:_flush():68] Loading settings from /data/users/cyang/repos/MSMT-CSD_INR/wandb/settings
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_setup.py:_flush():68] Loading settings from environment variables
+2025-06-21 22:12:13,708 INFO    MainThread:43736 [wandb_init.py:setup_run_log_directory():724] Logging user logs to /data/users/cyang/repos/MSMT-CSD_INR/wandb/run-20250621_221213-hwozjul5/logs/debug.log
+2025-06-21 22:12:13,709 INFO    MainThread:43736 [wandb_init.py:setup_run_log_directory():725] Logging internal logs to /data/users/cyang/repos/MSMT-CSD_INR/wandb/run-20250621_221213-hwozjul5/logs/debug-internal.log
+2025-06-21 22:12:13,709 INFO    MainThread:43736 [wandb_init.py:init():852] calling init triggers
+2025-06-21 22:12:13,709 INFO    MainThread:43736 [wandb_init.py:init():857] wandb.init called with sweep_config: {}
+config: {'_wandb': {}}
+2025-06-21 22:12:13,709 INFO    MainThread:43736 [wandb_init.py:init():893] starting backend
+2025-06-21 22:12:13,709 INFO    MainThread:43736 [wandb_init.py:init():897] sending inform_init request
+2025-06-21 22:12:13,725 INFO    MainThread:43736 [backend.py:_multiprocessing_setup():101] multiprocessing start_methods=fork,spawn,forkserver, using: spawn
+2025-06-21 22:12:13,725 INFO    MainThread:43736 [wandb_init.py:init():907] backend started and connected
+2025-06-21 22:12:13,727 INFO    MainThread:43736 [wandb_init.py:init():1002] updated telemetry
+2025-06-21 22:12:13,740 INFO    MainThread:43736 [wandb_init.py:init():1026] communicating run to backend with 90.0 second timeout
+2025-06-21 22:12:44,976 INFO    Thread-2 (wrapped_target):43736 [retry.py:__call__():175] [no run ID] Retry attempt failed:
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 198, in _new_conn
+    sock = connection.create_connection(
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 85, in create_connection
+    raise err
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/util/connection.py", line 73, in create_connection
+    sock.connect(sa)
+TimeoutError: timed out
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 787, in urlopen
+    response = self._make_request(
+               ^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 488, in _make_request
+    raise new_e
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 464, in _make_request
+    self._validate_conn(conn)
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 1093, in _validate_conn
+    conn.connect()
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 704, in connect
+    self.sock = sock = self._new_conn()
+                       ^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connection.py", line 207, in _new_conn
+    raise ConnectTimeoutError(
+urllib3.exceptions.ConnectTimeoutError: (<urllib3.connection.HTTPSConnection object at 0x7eff5acb0750>, 'Connection to api.wandb.ai timed out. (connect timeout=20)')
+
+The above exception was the direct cause of the following exception:
+
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/requests/adapters.py", line 667, in send
+    resp = conn.urlopen(
+           ^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/connectionpool.py", line 841, in urlopen
+    retries = retries.increment(
+              ^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/urllib3/util/retry.py", line 519, in increment
+    raise MaxRetryError(_pool, url, reason) from reason  # type: ignore[arg-type]
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+urllib3.exceptions.MaxRetryError: HTTPSConnectionPool(host='api.wandb.ai', port=443): Max retries exceeded with url: /graphql (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7eff5acb0750>, 'Connection to api.wandb.ai timed out. (connect timeout=20)'))
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/wandb/sdk/lib/retry.py", line 134, in __call__
+    result = self._call_fn(*args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/wandb/sdk/internal/internal_api.py", line 402, in execute
+    return self.client.execute(*args, **kwargs)  # type: ignore
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 52, in execute
+    result = self._get_result(document, *args, **kwargs)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/wandb/vendor/gql-0.2.0/wandb_gql/client.py", line 60, in _get_result
+    return self.transport.execute(document, *args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/wandb/sdk/lib/gql_request.py", line 58, in execute
+    request = self.session.post(self.url, **post_args)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/requests/sessions.py", line 637, in post
+    return self.request("POST", url, data=data, json=json, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/requests/sessions.py", line 589, in request
+    resp = self.send(prep, **send_kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/requests/sessions.py", line 703, in send
+    r = adapter.send(request, **kwargs)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/.venv/lib/python3.11/site-packages/requests/adapters.py", line 688, in send
+    raise ConnectTimeout(e, request=request)
+requests.exceptions.ConnectTimeout: HTTPSConnectionPool(host='api.wandb.ai', port=443): Max retries exceeded with url: /graphql (Caused by ConnectTimeoutError(<urllib3.connection.HTTPSConnection object at 0x7eff5acb0750>, 'Connection to api.wandb.ai timed out. (connect timeout=20)'))

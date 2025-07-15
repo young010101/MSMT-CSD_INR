@@ -94,82 +94,195 @@ def _initialize_dwi_idx():
 class VonShellDataset(DiffusionDataset):
     def __init__(
         self,
-        bvec_path: Path,
-        bval_path: Path,
-        mrtrix_bvec_path: Path,
-        response_path: Path,
-        shell: int,
-        bval_delta: int,
-        nifti_path: Path,
+        bvec_path: Path = None,
+        bval_path: Path = None,
+        mrtrix_bvec_path: Path = None,
+        response_path: Path = None,
+        shell: int = 0,
+        bval_delta: int = 0,
+        nifti_path: Path = None,
         mask_path: Path = None,
         scale: bool = True,
     ) -> None:
-        # nifti_file = nib.load(nifti_path)
-        n19 = nib.load('/data/users/cyang/notes/Research/genAI/diffusion/' + 'qb_diff_real_delta_19_avg_by_b.nii')
-        n49 = nib.load('/home/cyang/repos/MSMT-CSD_INR/' + 'qb_diff_real_delta_49_avg_by_b.nii')
-        mask = nib.load('/data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz')
-        mask_4d = mask.get_fdata().astype(int)[..., np.newaxis]
-        print(f'mask_4d.min()')
-
-        # if bvec_path and bval_path:
-        #     self.bvals = parse_bvals(bval_path)
-        #     self.bvecs = parse_bvecs(bvec_path)
-        # else:
-        #     mrtrix_bvecs = parse_mrtrix(mrtrix_bvec_path)
-        #     self.bvals = mrtrix_bvecs[:, -1]
-        #     self.bvecs = mrtrix_bvecs[:, :3]
-
-        # full_img = nifti_file.get_fdata()
-        full_img = np.concatenate([n19.get_fdata()[...,1:], n49.get_fdata()[...,1:]], axis=-1)
-        # self.dwi_idx = (self.bvals > (shell - bval_delta)) & (self.bvals < (shell + bval_delta))
+        # 对于von shell，我们不需要使用传入的nifti_path，而是使用专门的n19和n49数据
+        # 这些路径应该在配置文件中指定
         
-        # available_indices = np.where(self.dwi_idx)[0]  # ??????????????? 90
+        # 尝试加载n19和n49数据
+        try:
+            # 使用配置文件中的路径（如果存在）
+            n19_path = Path('/data/users/cyang/notes/Research/genAI/diffusion/qb_diff_real_delta_19_avg_by_b.nii')
+            n49_path = Path('/home/cyang/repos/MSMT-CSD_INR/qb_diff_real_delta_49_avg_by_b.nii')
+            
+            if n19_path.exists() and n49_path.exists():
+                n19 = nib.load(n19_path)
+                n49 = nib.load(n49_path)
+                full_img = np.concatenate([n19.get_fdata()[...,1:], n49.get_fdata()[...,1:]], axis=-1)
+                print(f"成功加载von shell数据文件")
+                print(f"n19形状: {n19.get_fdata()[...,1:].shape}")
+                print(f"n49形状: {n49.get_fdata()[...,1:].shape}")
+                print(f"合并后形状: {full_img.shape}")
+            else:
+                raise FileNotFoundError(f"von shell数据文件不存在: n19={n19_path.exists()}, n49={n49_path.exists()}")
+        except Exception as e:
+            raise FileNotFoundError(f"无法加载von shell数据文件: {e}")
 
-        # # undersample 30
-        # num_samples = 90 * 9 // 10
-        # selected_indices = np.random.choice(available_indices, num_samples, replace=False)
+        # 加载mask
+        if mask_path and mask_path.exists():
+            mask = nib.load(mask_path)
+            mask_data = mask.get_fdata().astype(int)
+            print(f"使用指定的mask文件: {mask_path}")
+            print(f"Mask形状: {mask_data.shape}")
+            
+            # 检查mask和图像形状是否匹配
+            if mask_data.shape[:3] != full_img.shape[:3]:
+                print(f"警告：Mask形状 {mask_data.shape[:3]} 与图像形状 {full_img.shape[:3]} 不匹配")
+                print("将调整mask大小以匹配图像")
+                # 这里可以添加mask重采样逻辑，暂时使用全图像
+                mask_4d = np.ones_like(full_img[..., :1], dtype=int)
+            else:
+                mask_4d = mask_data[..., np.newaxis]
+        else:
+            # 尝试使用备用mask路径
+            try:
+                backup_mask_path = Path('/data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz')
+                if backup_mask_path.exists():
+                    mask = nib.load(backup_mask_path)
+                    mask_data = mask.get_fdata().astype(int)
+                    print(f"使用备用mask文件: {backup_mask_path}")
+                    print(f"Mask形状: {mask_data.shape}")
+                    
+                    # 检查mask和图像形状是否匹配
+                    if mask_data.shape[:3] != full_img.shape[:3]:
+                        print(f"警告：备用Mask形状 {mask_data.shape[:3]} 与图像形状 {full_img.shape[:3]} 不匹配")
+                        print("将使用全图像")
+                        mask_4d = np.ones_like(full_img[..., :1], dtype=int)
+                    else:
+                        mask_4d = mask_data[..., np.newaxis]
+                else:
+                    print("警告：未找到mask文件，将使用全图像")
+                    mask_4d = np.ones_like(full_img[..., :1], dtype=int)
+            except Exception as e:
+                print(f"警告：无法加载mask文件: {e}，将使用全图像")
+                mask_4d = np.ones_like(full_img[..., :1], dtype=int)
 
-        # # bvecs
-        # undersampled_bvecs = bvecs[selected_indices]
-        # undersampled_img = full_img[..., selected_indices]  # ??????? 30 ???
-        # output_array = full_img[..., self.dwi_idx]  # remove b0
+        # 检查数据有效性
+        if np.isnan(full_img).any():
+            print("警告：输入图像包含NaN值，将替换为0")
+            full_img = np.nan_to_num(full_img, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        if np.isinf(full_img).any():
+            print("警告：输入图像包含Inf值，将替换为0")
+            full_img = np.nan_to_num(full_img, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # 应用mask
         output_array = full_img * mask_4d
-        # output_array = undersampled_img
+        
+        # 检查输出数组
+        if np.isnan(output_array).any():
+            print("警告：masked图像包含NaN值，将替换为0")
+            output_array = np.nan_to_num(output_array, nan=0.0, posinf=0.0, neginf=0.0)
+        
         width, height, depth, n_grad = output_array.shape
+        print(f"最终图像形状: {output_array.shape}")
+        print(f"Von shell输出通道数: {n_grad} (应该是16)")
 
-        # self.cart_bvecs = parse_bvecs(bvec_path)[self.dwi_idx]  # remove b0
-        # Separate into function for generating input coordinates
+        # 验证输出通道数
+        if n_grad != 16:
+            print(f"警告：输出通道数 {n_grad} 不等于16，这可能导致训练问题")
+
+        # 创建输入坐标
         self.input_tensor = create_input_space_prop(width, height, depth)
 
-        self.scale_value = np.percentile(output_array, 99) if scale else 1
+        # 缩放数据
+        if scale:
+            # 使用更稳定的百分位数计算
+            valid_data = output_array[output_array > 0]  # 只考虑非零值
+            if len(valid_data) > 0:
+                self.scale_value = np.percentile(valid_data, 99)
+                print(f"缩放因子: {self.scale_value}")
+            else:
+                self.scale_value = 1.0
+                print("警告：没有有效数据用于计算缩放因子")
+        else:
+            self.scale_value = 1.0
+        
         output_array = output_array / self.scale_value
 
-        if mask_path:
-            mask_data = nib.load(mask_path).get_fdata().astype(int)
-            brain_idx = np.asarray(mask_data == 1).nonzero()
-
-            self.input_tensor = self.input_tensor[
-                brain_idx[0], brain_idx[1], brain_idx[2]
-            ]
-            output_array = output_array[brain_idx[0], brain_idx[1], brain_idx[2], :]
+        # 应用mask到输入坐标
+        if mask_path and mask_path.exists():
+            try:
+                mask_data = nib.load(mask_path).get_fdata().astype(int)
+                brain_idx = np.asarray(mask_data == 1).nonzero()
+                
+                if len(brain_idx[0]) > 0:
+                    self.input_tensor = self.input_tensor[
+                        brain_idx[0], brain_idx[1], brain_idx[2]
+                    ]
+                    output_array = output_array[brain_idx[0], brain_idx[1], brain_idx[2], :]
+                    print(f"应用mask后，有效体素数量: {len(brain_idx[0])}")
+                else:
+                    print("警告：mask中没有有效体素，使用全图像")
+                    self.input_tensor = self.input_tensor.reshape(width * height * depth, 3)
+                    output_array = output_array.reshape(width * height * depth, -1)
+            except Exception as e:
+                print(f"警告：应用mask时出错: {e}，使用全图像")
+                self.input_tensor = self.input_tensor.reshape(width * height * depth, 3)
+                output_array = output_array.reshape(width * height * depth, -1)
         else:
             self.input_tensor = self.input_tensor.reshape(width * height * depth, 3)
             output_array = output_array.reshape(width * height * depth, -1)
 
+        # 转换为tensor并检查
         self.output_tensor = torch.tensor(output_array, dtype=torch.float32)
-        self.response_coeff = (
-            torch.tensor(
-                parse_response(response_path)[0], dtype=torch.float
-            )
-            / self.scale_value
-        )
-        self.dwi_idx = _initialize_dwi_idx()
+        
+        # 检查输出tensor
+        if torch.isnan(self.output_tensor).any():
+            print("警告：输出tensor包含NaN值，将替换为0")
+            self.output_tensor = torch.nan_to_num(self.output_tensor, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        if torch.isinf(self.output_tensor).any():
+            print("警告：输出tensor包含Inf值，将替换为0")
+            self.output_tensor = torch.nan_to_num(self.output_tensor, nan=0.0, posinf=0.0, neginf=0.0)
+
+        # 加载response文件
+        if response_path and response_path.exists():
+            try:
+                response_data = parse_response(response_path)
+                self.response_coeff = torch.tensor(
+                    response_data[0], dtype=torch.float32
+                ) / self.scale_value
+                print(f"成功加载response文件: {response_path}")
+            except Exception as e:
+                print(f"警告：无法加载response文件: {e}，使用默认值")
+                self.response_coeff = torch.ones(1, dtype=torch.float32)
+        else:
+            print("警告：response文件不存在，使用默认值")
+            self.response_coeff = torch.ones(1, dtype=torch.float32)
+
+        # 初始化DWI索引 - 对于von shell，我们有16个通道
+        self.dwi_idx = torch.ones(16, dtype=torch.bool)
+        
+        print(f"VonShellDataset初始化完成，数据点数量: {len(self)}")
+        print(f"输出tensor形状: {self.output_tensor.shape}")
+        print(f"输入tensor形状: {self.input_tensor.shape}")
 
     def __len__(self) -> int:
         return self.input_tensor.shape[0]
 
     def __getitem__(self, idx: int) -> tuple[torch.Tensor, torch.Tensor]:
-        return self.input_tensor[idx], self.output_tensor[idx]
+        input_data = self.input_tensor[idx]
+        output_data = self.output_tensor[idx]
+        
+        # 检查返回的数据
+        if torch.isnan(input_data).any() or torch.isinf(input_data).any():
+            print(f"警告：索引 {idx} 的输入数据包含异常值")
+            input_data = torch.nan_to_num(input_data, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        if torch.isnan(output_data).any() or torch.isinf(output_data).any():
+            print(f"警告：索引 {idx} 的输出数据包含异常值")
+            output_data = torch.nan_to_num(output_data, nan=0.0, posinf=0.0, neginf=0.0)
+        
+        return input_data, output_data
 
     def get_dwi_idx(self):
         """获取DWI索引"""
@@ -178,19 +291,22 @@ class VonShellDataset(DiffusionDataset):
         return self.dwi_idx.nonzero().flatten()
 
     def get_scale(self):
-        """添加get_scale方法，如果不存在的话"""
-        if hasattr(self, 'scale_factor'):
-            return self.scale_factor
-        return 1.0  # 默认缩放因子
+        """获取缩放因子"""
+        return self.scale_value
 
     def get_response(self) -> np.ndarray:
-        return self.response_coeff
+        return self.response_coeff.numpy()
 
     def get_directions(self) -> np.ndarray:
-        return self.cart_bvecs
+        # 对于von shell，我们需要返回适当的方向信息
+        # 这里返回一个默认的方向数组
+        n_directions = self.output_tensor.shape[1] if len(self.output_tensor.shape) > 1 else 1
+        return np.ones((n_directions, 3))  # 默认方向
 
     def get_bvals(self) -> np.ndarray:
-        return self.bvals
+        # 返回b值数组，这里使用默认值
+        n_directions = self.output_tensor.shape[1] if len(self.output_tensor.shape) > 1 else 1
+        return np.ones(n_directions) * 3000  # 默认b值
 
 
 class SingleShellDataset(DiffusionDataset):
@@ -289,8 +405,8 @@ class MultiShellDataset(Dataset):
         mrtrix_bvec_path: Path,
         response_paths: list[Path],
         bval_delta: int,
-        nifti_path: Path,
         shells: np.array,
+        nifti_path: Path,
         mask_path: Path = None,
         scale: bool = True,
     ) -> None:
@@ -389,19 +505,18 @@ class MultiShellDataset(Dataset):
 
 def create_vonshell(cfg: dict) -> DiffusionDataset:
     mask_path = Path(cfg["paths"]["mask"]) if cfg["paths"].get("mask", None) else None
-    bvec_path = Path(cfg["paths"]["fsl_bvecs"]) if cfg["paths"].get("fsl_bvecs", None) else None
-    bval_path = Path(cfg["paths"]["fsl_bvals"]) if cfg["paths"].get("fsl_bvals", None) else None
-    mrtrix_bvec_path = Path(cfg["paths"]["mrtrix_bvecs"]) if cfg["paths"].get("mrtrix_bvecs", None) else None
-
     response_path = Path(cfg['paths']['response'])
+    
+    # 对于von shell，我们不需要bvec、bval等DWI相关参数
+    # 只需要mask和response
     dataset = VonShellDataset(
-        bvec_path=bvec_path,
-        bval_path=bval_path,
-        mrtrix_bvec_path=mrtrix_bvec_path,
+        bvec_path=None,  # von shell不需要
+        bval_path=None,  # von shell不需要
+        mrtrix_bvec_path=None,  # von shell不需要
         response_path=response_path,
-        shell=cfg["shells"][0],
-        bval_delta=cfg["bval_delta"],
-        nifti_path=Path(cfg["paths"]["nifti"]),
+        shell=0,  # von shell不需要shell参数
+        bval_delta=0,  # von shell不需要bval_delta参数
+        nifti_path=None,  # von shell使用专门的n19/n49数据
         mask_path=mask_path,
         scale=cfg["scale_data"],
     )

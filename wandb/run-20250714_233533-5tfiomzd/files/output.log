@@ -1,0 +1,13 @@
+开始稳定训练...
+100%|██████████| 1685/1685 [00:30<00:00, 55.07it/s]
+Epoch 0: loss = 0.041475, NaN批次: 0
+Traceback (most recent call last):
+  File "/data/users/cyang/repos/MSMT-CSD_INR/run_stable_training.py", line 222, in <module>
+    model, losses = run_stable_training()
+                    ^^^^^^^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/run_stable_training.py", line 152, in run_stable_training
+    avg_loss = trainer.train()
+               ^^^^^^^^^^^^^^^
+  File "/data/users/cyang/repos/MSMT-CSD_INR/improved_trainer.py", line 299, in train
+    self.scheduler.step()
+TypeError: ReduceLROnPlateau.step() missing 1 required positional argument: 'metrics'

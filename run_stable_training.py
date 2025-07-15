@@ -7,6 +7,7 @@ import torch
 import numpy as np
 from pathlib import Path
 import yaml
+import argparse
 
 # 导入稳定的组件
 from improved_trainer import ImprovedTrainer
@@ -89,10 +90,10 @@ def create_stable_dataloader(cfg: dict) -> tuple:
     return dataset, dataloader
 
 
-def run_stable_training():
+def run_stable_training(config_path: str):
     """运行稳定训练"""
     # 加载配置
-    cfg = load_stable_config("configs/stable_config.yaml")
+    cfg = load_stable_config(config_path)
     
     # 设置设备
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
@@ -142,7 +143,9 @@ def run_stable_training():
         init_lr=cfg["train_cfg"]["lr"],
         warmup_epochs=cfg.get("stability", {}).get("warmup_epochs", 5),
         max_grad_norm=cfg.get("stability", {}).get("max_grad_norm", 1.0),
-        weight_decay=cfg["train_cfg"].get("weight_decay", 1e-6)
+        weight_decay=cfg["train_cfg"].get("weight_decay", 1e-6),
+        wandb_project=cfg.get("wandb_project"),
+        project_name=cfg.get("project_name")
     )
     
     # 开始训练
@@ -159,12 +162,12 @@ def run_stable_training():
     return model, avg_loss
 
 
-def debug_nan_issues():
+def debug_nan_issues(config_path: str):
     """调试NaN问题的工具函数"""
     print("=== NaN问题调试工具 ===")
     
     # 加载配置
-    cfg = load_stable_config("configs/stable_config.yaml")
+    cfg = load_stable_config(config_path)
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     
     # 创建模型
@@ -183,7 +186,7 @@ def debug_nan_issues():
         inputs = inputs.to(device)
         labels = labels.to(device)
         
-        print(f"\\n批次 {i}:")
+        print(f"\n批次 {i}:")
         print(f"输入统计: min={inputs.min():.6f}, max={inputs.max():.6f}, mean={inputs.mean():.6f}")
         print(f"标签统计: min={labels.min():.6f}, max={labels.max():.6f}, mean={labels.mean():.6f}")
         
@@ -205,21 +208,25 @@ def debug_nan_issues():
         if i >= 3:
             break
             
-    print("\\n=== 调试完成 ===")
+    print("\n=== 调试完成 ===")
 
 
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Run stable training with a specified config file.")
+    parser.add_argument('--config_file', type=str, default='configs/stable_config.yaml',
+                        help='Path to the configuration file.')
+    parser.add_argument('--mode', type=str, default='train', choices=['train', 'debug'],
+                        help='Mode to run the script in: train or debug.')
+    args = parser.parse_args()
+
     # 设置随机种子
     torch.manual_seed(42)
     np.random.seed(42)
     
-    # 选择运行模式
-    mode = "train"  # 或 "debug"
-    
-    if mode == "train":
-        model, losses = run_stable_training()
+    if args.mode == "train":
+        model, losses = run_stable_training(args.config_file)
         print("训练完成！")
-    elif mode == "debug":
-        debug_nan_issues()
+    elif args.mode == "debug":
+        debug_nan_issues(args.config_file)
     else:
         print("未知模式，请选择 'train' 或 'debug'")

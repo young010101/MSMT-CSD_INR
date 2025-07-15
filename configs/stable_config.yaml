@@ -1,36 +1,38 @@
-"""
-稳定训练配置示例
-用于避免NaN问题的配置
-"""
-
 project_name: "MSMT-CSD_INR_Stable"
-model_name: "stable_fod_nesh"  # 使用稳定版本模型
+model_name: von_mises_model  # 使用稳定版本模型
 output_calculator: "singleshell"
 loss_function_name: "stable_singleshell_csd_loss"  # 使用稳定版本损失函数
+dataset_name: "singleshell"
+bval_delta: 100 # values between the shell defined below +- bval_delta are included for the shell
+shells: [3000] # which bval shell to use
+scale_data: True # scale the dwi to 0-1 range before fitting
 
 # 路径配置
-paths:
-  recon_nifti: "data/processed/your_dwi_data.nii.gz"
-  recon_mask: "data/processed/your_mask.nii.gz"
-  fsl_bvals: "data/processed/your_bvals.txt"
-  fsl_bvecs: "data/processed/your_bvecs.txt"
+paths: # from repository root
+  mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
+  fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+  nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  output: runs/mwu100408
 
 # 数据配置
 width: 64
 height: 64
 depth: 64
-bval_delta: 100
 
 # 训练配置
 train_cfg:
   # 学习率配置 - 关键：更小的学习率
-  lr: 1e-4  # 从1e-3降低到1e-4
+  lr: 0.0001
   batch_size: 512
   epochs: 200
   
   # 正则化配置
-  lambda: 0.1
-  weight_decay: 1e-6  # 添加权重衰减
+  lambda_: 0.1
+  weight_decay: 0.000001
   
   # 模型配置
   lmax: 8

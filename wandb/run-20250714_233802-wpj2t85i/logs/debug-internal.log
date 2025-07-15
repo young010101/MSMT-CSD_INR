@@ -1,0 +1,18 @@
+{"time":"2025-07-14T23:38:02.322596947+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/data/users/cyang/repos/MSMT-CSD_INR/wandb/run-20250714_233802-wpj2t85i/logs/debug-core.log"}
+{"time":"2025-07-14T23:38:03.945664601+08:00","level":"INFO","msg":"created new stream","id":"wpj2t85i"}
+{"time":"2025-07-14T23:38:03.94575112+08:00","level":"INFO","msg":"stream: started","id":"wpj2t85i"}
+{"time":"2025-07-14T23:38:03.945791372+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"wpj2t85i"}
+{"time":"2025-07-14T23:38:03.945788091+08:00","level":"INFO","msg":"sender: started","stream_id":"wpj2t85i"}
+{"time":"2025-07-14T23:38:03.94577988+08:00","level":"INFO","msg":"handler: started","stream_id":"wpj2t85i"}
+{"time":"2025-07-14T23:38:04.686794257+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-07-14T23:51:36.842180394+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/yc5-tianjin-university/stable_training/wpj2t85i/file_stream\": EOF"}
+{"time":"2025-07-15T00:51:36.70217074+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/yc5-tianjin-university/stable_training/wpj2t85i/file_stream\": EOF"}
+{"time":"2025-07-15T01:51:36.286095512+08:00","level":"INFO","msg":"api: retrying error","error":"Post \"https://api.wandb.ai/files/yc5-tianjin-university/stable_training/wpj2t85i/file_stream\": EOF"}
+{"time":"2025-07-15T02:03:07.601637538+08:00","level":"INFO","msg":"stream: closing","id":"wpj2t85i"}
+{"time":"2025-07-15T02:03:07.601686769+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-07-15T02:03:07.601863259+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-07-15T02:03:10.786963723+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-07-15T02:03:13.463221667+08:00","level":"INFO","msg":"handler: closed","stream_id":"wpj2t85i"}
+{"time":"2025-07-15T02:03:13.463277238+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"wpj2t85i"}
+{"time":"2025-07-15T02:03:13.463311512+08:00","level":"INFO","msg":"sender: closed","stream_id":"wpj2t85i"}
+{"time":"2025-07-15T02:03:13.463497723+08:00","level":"INFO","msg":"stream: closed","id":"wpj2t85i"}

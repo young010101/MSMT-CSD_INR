@@ -1,0 +1,15 @@
+{"time":"2025-07-14T23:35:33.367468131+08:00","level":"INFO","msg":"stream: starting","core version":"0.19.10","symlink path":"/data/users/cyang/repos/MSMT-CSD_INR/wandb/run-20250714_233533-5tfiomzd/logs/debug-core.log"}
+{"time":"2025-07-14T23:35:35.207323613+08:00","level":"INFO","msg":"created new stream","id":"5tfiomzd"}
+{"time":"2025-07-14T23:35:35.207430933+08:00","level":"INFO","msg":"stream: started","id":"5tfiomzd"}
+{"time":"2025-07-14T23:35:35.207488309+08:00","level":"INFO","msg":"handler: started","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:35:35.2074902+08:00","level":"INFO","msg":"writer: Do: started","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:35:35.207542342+08:00","level":"INFO","msg":"sender: started","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:35:36.005525409+08:00","level":"INFO","msg":"Starting system monitor"}
+{"time":"2025-07-14T23:36:07.7894316+08:00","level":"INFO","msg":"stream: closing","id":"5tfiomzd"}
+{"time":"2025-07-14T23:36:07.789470379+08:00","level":"INFO","msg":"Stopping system monitor"}
+{"time":"2025-07-14T23:36:07.789516913+08:00","level":"INFO","msg":"Stopped system monitor"}
+{"time":"2025-07-14T23:36:10.405080623+08:00","level":"INFO","msg":"fileTransfer: Close: file transfer manager closed"}
+{"time":"2025-07-14T23:36:13.394500344+08:00","level":"INFO","msg":"handler: closed","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:36:13.394610525+08:00","level":"INFO","msg":"sender: closed","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:36:13.394579822+08:00","level":"INFO","msg":"writer: Close: closed","stream_id":"5tfiomzd"}
+{"time":"2025-07-14T23:36:13.394747281+08:00","level":"INFO","msg":"stream: closed","id":"5tfiomzd"}

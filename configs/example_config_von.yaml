@@ -6,9 +6,7 @@ loss_function_name: singleshell_csd_loss # see loss_functions.py
 gaussian_encoding: True # use fourier features encoding
 fod_rescale: True # multiply with rescaling factor after convolution of FOD and response
 dataset_name: von_shell # see datasets.py
-bval_delta: 100 # values between the shell defined below +- bval_delta are included for the shell
-shells: [3000] # which bval shell to use
-scale_data: True # scale the dwi to 0-1 range before fitting
+scale_data: True # scale the data to 0-1 range before fitting
 scheduler: True # use a learning rate schedular
 
 width: 145
@@ -19,15 +17,10 @@ log_freq: 0 # number of iterations between logging, 0 for no logging
 
 paths: # from repository root
   mask: /data/users/zzhou/GNC/Data/HC_030/Delta_19/brainmask_mask.nii.gz
-  fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
-  fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  # Von shell specific data paths
+  n19_data: /data/users/cyang/notes/Research/genAI/diffusion/qb_diff_real_delta_19_avg_by_b.nii
+  n49_data: /home/cyang/repos/MSMT-CSD_INR/qb_diff_real_delta_49_avg_by_b.nii
   response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
-  wm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
-  gm_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_gm.txt
-  csf_response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_csf.txt
-  nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
-  recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
-  recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
   output: runs/mwu100408_von
 
 train_cfg:
@@ -35,9 +28,27 @@ train_cfg:
   lpos: 5000 # number of positional encodings
   n_layers: 4
   hidden_dim: 1024
-  lr: 0.00001
-  epochs: 50
-  batch_size: 256
+  lr: 0.00000001  # 进一步降低学习率以提高稳定性
+  epochs: 100  # 增加最大epoch数，但会早期停止
+  batch_size: 32  # 进一步减小批次大小以减少数值问题
   lambda: 0 # deprecated, but necessary to put to a value
   slice_id: 45 # slice used for logging intermediate images
   sigma: 4 # sigma for gaussian used in fourier features encoding
+
+# 智能训练配置
+stability:
+  max_grad_norm: 0.1  # 更严格的梯度裁剪
+  weight_decay: 1e-5  # 权重衰减
+  warmup_epochs: 5    # 学习率预热
+  patience: 8         # 早期停止耐心 - 更短
+  max_loss_threshold: 50  # 最大损失阈值
+  min_lr: 1e-8        # 最小学习率
+  gradient_clip_val: 0.1  # 梯度裁剪值
+  
+# 智能早期停止配置
+early_stopping:
+  min_delta: 1e-6     # 最小改善阈值
+  trend_window: 8     # 趋势分析窗口
+  improvement_threshold: 0.0005  # 改善阈值
+  stagnation_patience: 6  # 停滞耐心
+  rise_threshold: 1.05   # 损失上升阈值

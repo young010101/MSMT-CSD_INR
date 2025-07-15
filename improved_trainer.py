@@ -47,9 +47,14 @@ class ImprovedTrainer:
     weight_decay: float = 1e-6  # 权重衰减
     eps: float = 1e-8  # 用于数值稳定性的小值
 
+    # wandb 参数
+    wandb_project: str = "stable_training"
+    project_name: str = "MSMT-CSD_INR_Stable"
+
     def __post_init__(self):
         self.wandb_log = self.log_freq > 0
         if self.wandb_log:
+            wandb.init(project=self.wandb_project, name=self.project_name)
             wandb.watch(self.model, log="all", log_freq=self.log_freq)
 
         self.model.to(self.device)
@@ -291,7 +296,7 @@ class ImprovedTrainer:
                 })
                 
             if self.scheduler:
-                self.scheduler.step()
+                self.scheduler.step(mean_loss)
                 
             avg_loss.append(mean_loss)
             
