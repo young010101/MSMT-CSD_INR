@@ -15,7 +15,7 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 
 def initialize_run():
-    cfg = parse_cfg(Path("configs/example_config_multi.yaml"))
+    cfg = parse_cfg(Path("configs/example_config.yaml"))
     #wandb.init(project=cfg["project_name"], job_type="testing", config=cfg)
 
     #cfg = wandb.config

@@ -25,7 +25,7 @@ paths: # from repository root
   nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
   recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
   recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
-  output: runs/mwu100408
+  output: runs/mwu100408_250716
 
 train_cfg:
   lmax: 8
