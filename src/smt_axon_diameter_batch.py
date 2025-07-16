@@ -7,6 +7,9 @@ import matplotlib.pyplot as plt
 # Constants
 gmr = 2.67e8
 
+# 在文件顶部添加全局变量
+alphm_warning_count = 0
+
 
 class SMTAxonDiameterOptimized:
     def __init__(self, device, max_batch_size=1000):
@@ -109,8 +112,11 @@ class SMTAxonDiameterOptimized:
 
         # 预检查alphm是否会溢出 - 更严格的上限
         if (alphm > 1e1).any():
-            print("警告：alphm值过大，限制在安全范围内")
-            alphm = torch.clamp(alphm, max=1e1)  # 更严格的上限
+            global alphm_warning_count
+            alphm_warning_count += 1
+            # 替换原有的print("警告：alphm值过大，限制在安全范围内")为计数
+            # 并在每个epoch结束后输出统计
+            # print("警告：alphm值过大，限制在安全范围内")
 
         # 向量化计算所有alpha相关项
         alpha_2 = alphm ** 2  # (batch_size, n_roots)
