@@ -1,6 +1,7 @@
 import wandb
 import torch
 import nibabel as nib
+import time
 
 from utils import parse_cfg
 
@@ -72,7 +73,7 @@ def initialize_run():
 
     trainer.train()
 
-    file_inf = "test"
+    file_inf = wandb.run.id if wandb.run and hasattr(wandb.run, 'id') else time.strftime("%Y%m%d_%H%M%S")  # 用wandb run id做唯一标识，若无则用时间戳
 
     output_folder = Path(cfg["paths"]["output"])
     if not output_folder.exists():
