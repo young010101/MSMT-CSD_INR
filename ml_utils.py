@@ -34,6 +34,8 @@ class Trainer:
     scheduler: torch.optim.lr_scheduler.LRScheduler = None
     slice_id: int = 0
     grad_id: int = 0
+    val_loader: DataLoader = None
+    test_loader: DataLoader = None
 
     def __post_init__(self):
         self.wandb_log = self.log_freq > 0
@@ -42,9 +44,22 @@ class Trainer:
 
         self.model.to(self.device)
 
+    def evaluate(self, loader):
+        self.model.eval()
+        losses = []
+        with torch.no_grad():
+            for _input, labels in loader:
+                _input = _input.to(self.device)
+                labels = labels.to(self.device)
+                model_out = self.model(_input)
+                output, kwargs = self.output_calculator.output_from_model_out(model_out)
+                loss = self.loss_fn(output, labels, **kwargs)
+                losses.append(loss.item())
+        return float(np.mean(losses)) if losses else float('nan')
+
     def train(self):
         avg_loss = []
-        for _ in range(self.epochs):
+        for epoch in range(self.epochs):
             losses = []
             for i, (_input, labels) in enumerate(tqdm(self.dataloader)):
                 self.model.train()
@@ -68,15 +83,28 @@ class Trainer:
                 losses.append(loss_item)
 
             mean_loss = np.array(losses).mean()
+            val_loss = None
+            if self.val_loader is not None:
+                val_loss = self.evaluate(self.val_loader)
 
             if self.wandb_log:
-                wandb.log({"loss": mean_loss})
+                log_dict = {"train/loss": mean_loss}
+                if val_loss is not None:
+                    log_dict["val/loss"] = val_loss
+                wandb.log(log_dict)
                 self.log_progress_image()
 
             if self.scheduler:
                 self.scheduler.step()
 
             avg_loss.append(mean_loss)
+
+        # 训练结束后在test set上评估
+        if self.test_loader is not None:
+            test_loss = self.evaluate(self.test_loader)
+            if self.wandb_log:
+                wandb.log({"test/loss": test_loss})
+            print(f"Test loss: {test_loss}")
 
     def log_progress_image(self) -> None:
         width, height, depth = self.data_shape

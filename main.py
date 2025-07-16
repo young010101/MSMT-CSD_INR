@@ -2,6 +2,8 @@ import wandb
 import torch
 import nibabel as nib
 import time
+import numpy as np
+from torch.utils.data import Subset
 
 from utils import parse_cfg
 
@@ -9,9 +11,9 @@ from loss_functions import get_loss_function
 from output_calculators import get_output_calculator
 from ml_utils import Trainer
 from models import get_model
-from datasets import get_dataset
+from datasets import get_dataset, DiffusionDataset
 from pathlib import Path
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Dataset
 from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 
@@ -34,13 +36,37 @@ def initialize_run():
     model = get_model(cfg)
     print(model)
 
-    dataset = get_dataset(cfg)
-    dataloader = DataLoader(
-        dataset,
+    dataset: DiffusionDataset | Dataset = get_dataset(cfg)
+    num_samples = len(dataset)
+    indices = np.random.permutation(num_samples).tolist()
+    train_end = int(0.7 * num_samples)
+    val_end = int(0.9 * num_samples)
+    train_indices = indices[:train_end]
+    val_indices = indices[train_end:val_end]
+    test_indices = indices[val_end:]
+
+    train_dataset = Subset(dataset, train_indices)
+    val_dataset = Subset(dataset, val_indices)
+    test_dataset = Subset(dataset, test_indices)
+
+    train_loader = DataLoader(
+        train_dataset,
         batch_size=train_cfg["batch_size"],
         shuffle=True,
         num_workers=3,
         drop_last=True,
+    )
+    val_loader = DataLoader(
+        val_dataset,
+        batch_size=train_cfg["batch_size"],
+        shuffle=False,
+        num_workers=3,
+    )
+    test_loader = DataLoader(
+        test_dataset,
+        batch_size=train_cfg["batch_size"],
+        shuffle=False,
+        num_workers=3,
     )
 
     loss_fn = get_loss_function(cfg)
@@ -57,7 +83,7 @@ def initialize_run():
     trainer = Trainer(
         model=model,
         dataset=dataset,
-        dataloader=dataloader,
+        dataloader=train_loader,
         loss_fn=loss_fn,
         optimizer=optimizer,
         device=device,
@@ -69,9 +95,24 @@ def initialize_run():
         lambda_=lambda_,
         slice_id=train_cfg["slice_id"],
         scheduler=scheduler,
+        val_loader=val_loader,
+        test_loader=test_loader,
     )
 
     trainer.train()
+
+    # 输出volume序号、原始nifti索引和b值的对应关系表
+    print("\n==== 输出volume序号与b值、原始nifti索引的对应关系 ====")
+    if isinstance(dataset, DiffusionDataset):
+        try:
+            bvals = dataset.get_bvals()
+            dwi_indices = dataset.get_dwi_idx()
+            for i, (idx, bval) in enumerate(zip(dwi_indices, bvals)):
+                print(f"输出volume序号: {i}, 原始nifti索引: {idx}, b值: {bval}")
+        except Exception as e:
+            print(f"无法输出volume与b值对应表: {e}")
+    else:
+        print("当前数据集类型不支持自动输出b值与volume索引表。")
 
     file_inf = wandb.run.id if wandb.run and hasattr(wandb.run, 'id') else time.strftime("%Y%m%d_%H%M%S")  # 用wandb run id做唯一标识，若无则用时间戳
 
@@ -84,13 +125,14 @@ def initialize_run():
     wandb.save(str(model_path))
 
     if cfg["model_name"] in ["multishell", "split_multi"]:
+        scale = float(dataset.get_scale()) if isinstance(dataset, DiffusionDataset) else 1.0
         (
             nifti_img,
             grad_img,
             coeff_image,
             gm_coeff,
             csf_coeff,
-        ) = trainer.create_full_output_image(cfg, dataset.get_scale())
+        ) = trainer.create_full_output_image(cfg, scale)
 
         gm_coeff_img = nib.Nifti1Image(
             gm_coeff, affine=nifti_img.affine, header=nifti_img.header
@@ -106,8 +148,9 @@ def initialize_run():
         nib.save(csf_coeff_img, csf_coeff_path)
         wandb.save(str(csf_coeff_path))
     else:
+        scale = float(dataset.get_scale()) if isinstance(dataset, DiffusionDataset) else 1.0
         nifti_img, grad_img, coeff_image = trainer.create_full_output_image(
-            cfg, dataset.get_scale()
+            cfg, scale
         )
 
     full_nifti_img = nib.Nifti1Image(
