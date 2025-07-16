@@ -15,7 +15,7 @@ width: 145
 height: 174
 depth: 145
 
-log_freq: 0 # number of iterations between logging, 0 for no logging
+log_freq: 100 # number of iterations between logging, 0 for no logging
 
 paths: # from repository root
   mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz

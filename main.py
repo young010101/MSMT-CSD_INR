@@ -16,9 +16,9 @@ from torch.optim.lr_scheduler import ReduceLROnPlateau, StepLR
 
 def initialize_run():
     cfg = parse_cfg(Path("configs/example_config.yaml"))
-    #wandb.init(project=cfg["project_name"], job_type="testing", config=cfg)
-
-    #cfg = wandb.config
+    # 启用wandb日志记录
+    wandb.init(project=cfg["project_name"], job_type="training", config=cfg)
+    # cfg = wandb.config  # 可选：用wandb.config替换cfg
     train_cfg = cfg["train_cfg"]
 
     width = cfg["width"]
@@ -77,7 +77,10 @@ def initialize_run():
     output_folder = Path(cfg["paths"]["output"])
     if not output_folder.exists():
         output_folder.mkdir(parents=True)
-    torch.save(trainer.model.state_dict(), output_folder / f"model_{file_inf}.pt")
+    model_path = output_folder / f"model_{file_inf}.pt"
+    torch.save(trainer.model.state_dict(), model_path)
+    # 上传模型到wandb
+    wandb.save(str(model_path))
 
     if cfg["model_name"] in ["multishell", "split_multi"]:
         (
@@ -91,12 +94,16 @@ def initialize_run():
         gm_coeff_img = nib.Nifti1Image(
             gm_coeff, affine=nifti_img.affine, header=nifti_img.header
         )
-        nib.save(gm_coeff_img, output_folder / f"gm_coeffs_{file_inf}.nii.gz")
+        gm_coeff_path = output_folder / f"gm_coeffs_{file_inf}.nii.gz"
+        nib.save(gm_coeff_img, gm_coeff_path)
+        wandb.save(str(gm_coeff_path))
 
         csf_coeff_img = nib.Nifti1Image(
             csf_coeff, affine=nifti_img.affine, header=nifti_img.header
         )
-        nib.save(csf_coeff_img, output_folder / f"csf_coeffs_{file_inf}.nii.gz")
+        csf_coeff_path = output_folder / f"csf_coeffs_{file_inf}.nii.gz"
+        nib.save(csf_coeff_img, csf_coeff_path)
+        wandb.save(str(csf_coeff_path))
     else:
         nifti_img, grad_img, coeff_image = trainer.create_full_output_image(
             cfg, dataset.get_scale()
@@ -105,12 +112,16 @@ def initialize_run():
     full_nifti_img = nib.Nifti1Image(
         grad_img, affine=nifti_img.affine, header=nifti_img.header
     )
-    nib.save(full_nifti_img, output_folder / f"grads_{file_inf}.nii.gz")
+    grads_path = output_folder / f"grads_{file_inf}.nii.gz"
+    nib.save(full_nifti_img, grads_path)
+    wandb.save(str(grads_path))
 
     full_coeff_img = nib.Nifti1Image(
         coeff_image, affine=nifti_img.affine, header=nifti_img.header
     )
-    nib.save(full_coeff_img, output_folder / f"coeffs_{file_inf}.nii.gz")
+    coeffs_path = output_folder / f"coeffs_{file_inf}.nii.gz"
+    nib.save(full_coeff_img, coeffs_path)
+    wandb.save(str(coeffs_path))
 
 
 if __name__ == "__main__":
