@@ -1,0 +1,100 @@
+# 基础配置
+base_config: &base
+  project_name: training_strategies
+  model_name: fod
+  output_calculator: singleshell
+  loss_function_name: singleshell_csd_loss
+  gaussian_encoding: True
+  fod_rescale: True
+  dataset_name: singleshell
+  bval_delta: 100
+  shells: [3000]
+  scale_data: True
+  scheduler: True
+
+  width: 145
+  height: 174
+  depth: 145
+
+  log_freq: 100
+
+  paths: &base_paths
+    mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+    fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
+    fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+    response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+    nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+    recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+    recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+    output: runs/training_strategies
+
+  train_cfg: &base_train
+    lmax: 8
+    lpos: 5000
+    n_layers: 4
+    hidden_dim: 1024
+    lr: 0.0001
+    epochs: 5  # 减少训练周期
+    batch_size: 500
+    lambda: 0
+    slice_id: 45
+    sigma: 4
+
+# 全量训练（基于奇偶分离）
+odd_even_split:
+  <<: *base
+  split_strategy: odd_even
+  project_name: training_strategies_odd_even
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/odd_even
+
+# 70%随机采样
+random_70:
+  <<: *base
+  split_strategy: random
+  train_ratio: 0.7
+  project_name: training_strategies_random_70
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/random_70
+
+# 50%随机采样
+random_50:
+  <<: *base
+  split_strategy: random
+  train_ratio: 0.5
+  project_name: training_strategies_random_50
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/random_50
+
+# 30%随机采样
+random_30:
+  <<: *base
+  split_strategy: random
+  train_ratio: 0.3
+  project_name: training_strategies_random_30
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/random_30 
+
+# 40%随机采样
+random_40:
+  <<: *base
+  split_strategy: random
+  train_ratio: 0.4
+  project_name: training_strategies_random_40
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/random_40 
+
+# 60%随机采样
+random_60:
+  <<: *base
+  split_strategy: random
+  train_ratio: 0.6
+  project_name: training_strategies_random_60
+  paths:
+    <<: *base_paths
+    output: runs/training_strategies/random_60 

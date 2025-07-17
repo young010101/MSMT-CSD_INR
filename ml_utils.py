@@ -60,8 +60,18 @@ class Trainer:
     def train(self):
         avg_loss = []
         for epoch in range(self.epochs):
+            print(f"\nEpoch {epoch+1}/{self.epochs}")
             losses = []
-            for i, (_input, labels) in enumerate(tqdm(self.dataloader)):
+            
+            # 使用tqdm创建进度条
+            progress_bar = tqdm(
+                self.dataloader, 
+                desc=f"Training", 
+                leave=True,
+                ncols=100
+            )
+            
+            for i, (_input, labels) in enumerate(progress_bar):
                 self.model.train()
                 _input = _input.to(self.device)
 
@@ -81,11 +91,19 @@ class Trainer:
 
                 loss_item = loss.item()
                 losses.append(loss_item)
+                
+                # 更新进度条描述，显示当前batch的损失
+                progress_bar.set_description(f"Training (loss={loss_item:.4f})")
 
             mean_loss = np.array(losses).mean()
             val_loss = None
             if self.val_loader is not None:
+                print("Evaluating on validation set...")
                 val_loss = self.evaluate(self.val_loader)
+                print(f"Validation loss: {val_loss:.4f}")
+
+            print(f"Epoch {epoch+1}/{self.epochs} - Train loss: {mean_loss:.4f}" + 
+                  (f", Val loss: {val_loss:.4f}" if val_loss is not None else ""))
 
             if self.wandb_log:
                 log_dict = {"train/loss": mean_loss}
@@ -101,10 +119,11 @@ class Trainer:
 
         # 训练结束后在test set上评估
         if self.test_loader is not None:
+            print("\nEvaluating on test set...")
             test_loss = self.evaluate(self.test_loader)
             if self.wandb_log:
                 wandb.log({"test/loss": test_loss})
-            print(f"Test loss: {test_loss}")
+            print(f"Test loss: {test_loss:.4f}")
 
     def log_progress_image(self) -> None:
         width, height, depth = self.data_shape

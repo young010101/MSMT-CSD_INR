@@ -1,0 +1,38 @@
+bval_delta: 100
+dataset_name: singleshell
+depth: 145
+fod_rescale: true
+gaussian_encoding: true
+height: 174
+log_freq: 100
+loss_function_name: singleshell_csd_loss
+model_name: fod
+output_calculator: singleshell
+paths:
+  fsl_bvals: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bval
+  fsl_bvecs: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_fsl.bvec
+  mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  output: runs/training_strategies/random_70
+  recon_mask: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff_mask.nii.gz
+  recon_nifti: /data/users/cyang/HCP-MWU-ODF/mwu100408/diff/mwu100408_diff.nii.gz
+  response: /data/users/cyang/HCP-MWU-ODF/mwu100408/csd/mwu100408_rf_wm.txt
+project_name: training_strategies_random_70
+scale_data: true
+scheduler: true
+shells:
+- 3000
+split_strategy: random
+train_cfg:
+  batch_size: 500
+  epochs: 5
+  hidden_dim: 1024
+  lambda: 0
+  lmax: 8
+  lpos: 5000
+  lr: 0.0001
+  n_layers: 4
+  sigma: 4
+  slice_id: 45
+train_ratio: 0.7
+width: 145
