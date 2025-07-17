@@ -37,16 +37,20 @@ def initialize_run():
     print(model)
 
     dataset: DiffusionDataset | Dataset = get_dataset(cfg)
-    num_samples = len(dataset)
-    indices = np.random.permutation(num_samples).tolist()
-    train_end = int(0.7 * num_samples)
-    val_end = int(0.9 * num_samples)
-    train_indices = indices[:train_end]
-    val_indices = indices[train_end:val_end]
-    test_indices = indices[val_end:]
+    # 基于z轴slice的奇偶性划分数据集
+    if isinstance(dataset, DiffusionDataset):
+        input_tensor = dataset.input_tensor
+    else:
+        raise AttributeError('当前数据集类型不支持基于slice的划分（缺少input_tensor属性）')
+    depth = cfg["depth"]
+    # 反归一化z坐标到索引（假设[-1,1] -> [0, depth-1]）
+    z_coords = input_tensor[:, 2]
+    z_idx = torch.round((z_coords + 1) * (depth - 1) / 2).to(torch.int).cpu().numpy()
+    train_indices = [i for i, z in enumerate(z_idx) if z % 2 == 1]
+    test_indices = [i for i, z in enumerate(z_idx) if z % 2 == 0]
 
     train_dataset = Subset(dataset, train_indices)
-    val_dataset = Subset(dataset, val_indices)
+    val_dataset = Subset(dataset, test_indices)  # 偶数层既做val也做test
     test_dataset = Subset(dataset, test_indices)
 
     train_loader = DataLoader(
@@ -101,6 +105,9 @@ def initialize_run():
 
     trainer.train()
 
+    # 输出当前划分方式和数量统计
+    print(f"\n==== 数据集划分方式：z轴奇数层用于训练，偶数层用于验证/测试 ====")
+    print(f"训练集体素数: {len(train_indices)}，验证/测试集体素数: {len(test_indices)}")
     # 输出volume序号、原始nifti索引和b值的对应关系表
     print("\n==== 输出volume序号与b值、原始nifti索引的对应关系 ====")
     if isinstance(dataset, DiffusionDataset):
