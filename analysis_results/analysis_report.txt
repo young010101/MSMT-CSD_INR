@@ -1,0 +1,21 @@
+Gradient Analysis Report
+======================
+
+
+Full Training:
+--------------
+Odd layers  - Mean: 4874.9653, Std: 9436.4369
+Even layers - Mean: 4807.0855, Std: 9382.5065
+Difference (Odd-Even): 67.8799
+
+70% Sampling:
+-------------
+Odd layers  - Mean: 4874.8280, Std: 9435.6294
+Even layers - Mean: 4806.9408, Std: 9381.6638
+Difference (Odd-Even): 67.8871
+
+Odd-Even Split:
+---------------
+Odd layers  - Mean: 4871.9869, Std: 9431.2265
+Even layers - Mean: 4804.0539, Std: 9377.3864
+Difference (Odd-Even): 67.9330
